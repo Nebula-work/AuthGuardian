@@ -13,6 +13,7 @@ import Documentation from './pages/Documentation';
 // Components
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import { DashboardLayout } from './components/Layout/DashboardLayout';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -20,28 +21,21 @@ interface ProtectedRouteProps {
 
 // Protected route component
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+    const { isAuthenticated, loading } = useAuth();
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
+    if (loading) {
+        return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
 
-  return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Navbar />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+
+    return <DashboardLayout>{children}</DashboardLayout>;
+
 };
+
 
 function App() {
   return (
@@ -79,27 +73,26 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/documentation"
-        element={
-          <ProtectedRoute>
-            <Documentation />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/documentation/:docId"
-        element={
-          <ProtectedRoute>
-            <Documentation />
-          </ProtectedRoute>
-        }
-      />
+      {/*<Route*/}
+      {/*  path="/documentation"*/}
+      {/*  element={*/}
+      {/*    <ProtectedRoute>*/}
+      {/*      <Documentation />*/}
+      {/*    </ProtectedRoute>*/}
+      {/*  }*/}
+      {/*/>*/}
+      {/*<Route*/}
+      {/*  path="/documentation/:docId"*/}
+      {/*  element={*/}
+      {/*    <ProtectedRoute>*/}
+      {/*      <Documentation />*/}
+      {/*    </ProtectedRoute>*/}
+      {/*  }*/}
+      {/*/>*/}
       <Route path="*" element={<Navigate to="/" replace />} />
       <Route path="/docs" element={<Documentation/>} />
       <Route path="/docs/:docId" element={<Documentation />} />
-      <Route path="/docs/:docId/:section" element={<Documentation />} />
-      <Route path="/docs/:docId/:section/:subSection" element={<Documentation />} />
+
     </Routes>
   );
 }

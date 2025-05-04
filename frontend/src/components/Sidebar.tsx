@@ -57,20 +57,30 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => {
 };
 
 const Sidebar: React.FC = () => {
-  return (
-    <div className="bg-blue-800 w-64 pt-5 pb-10 fixed inset-y-0 left-0 transform flex flex-col z-40">
-      <div className="flex items-center justify-center text-white text-2xl font-semibold mb-6">
-        RBAC System
-      </div>
-      <div className="flex flex-col flex-1">
-        <NavItem to="/" icon={<DashboardIcon />} label="Dashboard" />
-        <NavItem to="/users" icon={<UsersIcon />} label="Users" />
-        <NavItem to="/organizations" icon={<OrganizationsIcon />} label="Organizations" />
-        <NavItem to="/roles" icon={<RolesIcon />} label="Roles & Permissions" />
-        <NavItem to="/documentation" icon={<DocumentationIcon />} label="Documentation" />
-      </div>
-    </div>
-  );
+    const [collapsed, setCollapsed] = React.useState(false);
+
+    return (
+        <div className={`bg-blue-800 ${collapsed ? 'w-20' : 'w-64'} pt-5 pb-10 fixed inset-y-0 left-0 transform flex flex-col z-40 transition-all`}>
+            <div className="flex items-center justify-center text-white text-2xl font-semibold mb-6">
+                {collapsed ? (
+                    <span className="text-lg">RBAC</span>
+                ) : (
+                    <span className="text-2xl">RBAC System</span>
+                )}
+            </div>
+            <button onClick={() => setCollapsed(!collapsed)} className="text-white px-4 py-2">
+                Toggle Sidebar
+            </button>
+            <div className="flex flex-col flex-1">
+                <NavItem to="/" icon={<DashboardIcon />} label={collapsed ? '' : 'Dashboard'} />
+                <NavItem to="/users" icon={<UsersIcon />} label={collapsed ? '' : 'Users'} />
+                <NavItem to="/organizations" icon={<OrganizationsIcon />} label={collapsed ? '' : 'Organizations'} />
+                <NavItem to="/roles" icon={<RolesIcon />} label={collapsed ? '' : 'Roles & Permissions'} />
+                <NavItem to="/documentation" icon={<DocumentationIcon />} label={collapsed ? '' : 'Documentation'} />
+            </div>
+        </div>
+    );
 };
+
 
 export default Sidebar;
