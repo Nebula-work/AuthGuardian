@@ -55,8 +55,11 @@ func main() {
 	// Initialize roles
 	initializeRoles(ctx, rolesCollection, permissionsCollection)
 
+	// Initialize default organization
+	initializeOrganization(ctx, organizationsCollection)
+
 	// Create admin user if not exists
-	createAdminUser(ctx, usersCollection, rolesCollection)
+	createAdminUser(ctx, usersCollection, rolesCollection, organizationsCollection)
 
 	log.Println("Database initialization completed")
 }
@@ -110,13 +113,13 @@ func initializePermissions(ctx context.Context, permissionsCollection *mongo.Col
 		var permissionDocs []interface{}
 		for _, p := range permissions {
 			permissionDocs = append(permissionDocs, models.Permission{
-				Name:           p.name,
-				Description:    p.description,
-				Resource:       p.resource,
-				Action:         p.action,
+				Name:            p.name,
+				Description:     p.description,
+				Resource:        p.resource,
+				Action:          p.action,
 				IsSystemDefault: true,
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
 			})
 		}
 
@@ -166,7 +169,7 @@ func initializeRoles(ctx context.Context, rolesCollection, permissionsCollection
 
 	for _, perm := range permissions {
 		allPermissionIDs = append(allPermissionIDs, perm.ID)
-		
+
 		// Store specific permission IDs for regular user role
 		if perm.Name == "user.read" {
 			userReadPermissionID = perm.ID
@@ -223,20 +226,53 @@ func initializeRoles(ctx context.Context, rolesCollection, permissionsCollection
 
 func getOrgAdminPermissions(permissions []models.Permission) []primitive.ObjectID {
 	var permIDs []primitive.ObjectID
-	
+
 	for _, perm := range permissions {
 		// Include all org-related permissions and user management within org
-		if perm.Resource == models.ResourceOrganization || 
-		   perm.Resource == models.ResourceUser || 
-		   perm.Resource == models.ResourceRole {
+		if perm.Resource == models.ResourceOrganization ||
+			perm.Resource == models.ResourceUser ||
+			perm.Resource == models.ResourceRole {
 			permIDs = append(permIDs, perm.ID)
 		}
 	}
-	
+
 	return permIDs
 }
 
-func createAdminUser(ctx context.Context, usersCollection, rolesCollection *mongo.Collection) {
+func initializeOrganization(ctx context.Context, organizationsCollection *mongo.Collection) {
+	log.Println("Initializing default organization...")
+
+	// Check if default organization already exists
+	count, err := organizationsCollection.CountDocuments(ctx, bson.M{"name": "Default Organization"})
+	if err != nil {
+		log.Fatalf("Failed to check for default organization: %v", err)
+	}
+
+	if count > 0 {
+		log.Println("Default organization already exists, skipping creation")
+		return
+	}
+
+	// Create default organization
+	defaultOrg := models.Organization{
+		Name:        "Default Organization",
+		Description: "Default organization for system users",
+		Domain:      "example.com",
+		Active:      true,
+		AdminIDs:    []primitive.ObjectID{}, // Will be updated when admin user is created
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	result, err := organizationsCollection.InsertOne(ctx, defaultOrg)
+	if err != nil {
+		log.Fatalf("Failed to insert default organization: %v", err)
+	}
+
+	log.Printf("Created default organization with ID: %v", result.InsertedID)
+}
+
+func createAdminUser(ctx context.Context, usersCollection, rolesCollection, organizationsCollection *mongo.Collection) {
 	log.Println("Creating admin user if not exists...")
 
 	// Check if admin user already exists
@@ -263,25 +299,59 @@ func createAdminUser(ctx context.Context, usersCollection, rolesCollection *mong
 		log.Fatalf("Failed to hash password: %v", err)
 	}
 
-	// Create admin user
-	adminUser := models.User{
-		Username:       "admin",
-		Email:          "admin@example.com",
-		HashedPassword: hashedPassword,
-		FirstName:      "System",
-		LastName:       "Administrator",
-		Active:         true,
-		EmailVerified:  true,
-		RoleIDs:        []primitive.ObjectID{adminRole.ID},
-		AuthProvider:   models.LocalAuth,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+	// Get default organization
+	var defaultOrg models.Organization
+	err = organizationsCollection.FindOne(ctx, bson.M{"name": "Default Organization"}).Decode(&defaultOrg)
+	if err != nil {
+		log.Printf("Failed to retrieve default organization: %v", err)
+		log.Println("Will create admin user without organization")
 	}
 
-	_, err = usersCollection.InsertOne(ctx, adminUser)
+	// Create admin user
+	adminUser := models.User{
+		Username:        "admin",
+		Email:           "admin@example.com",
+		HashedPassword:  hashedPassword,
+		FirstName:       "System",
+		LastName:        "Administrator",
+		Active:          true,
+		EmailVerified:   true,
+		RoleIDs:         []primitive.ObjectID{adminRole.ID},
+		OrganizationIDs: []primitive.ObjectID{},
+		AuthProvider:    models.LocalAuth,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	// Add default organization ID if available
+	if defaultOrg.ID != primitive.NilObjectID {
+		adminUser.OrganizationIDs = []primitive.ObjectID{defaultOrg.ID}
+	}
+
+	result, err := usersCollection.InsertOne(ctx, adminUser)
 	if err != nil {
 		log.Fatalf("Failed to insert admin user: %v", err)
 	}
 
 	log.Println("Created admin user with username 'admin' and password 'admin123'")
+
+	// Update default organization to include admin user as admin
+	if defaultOrg.ID != primitive.NilObjectID {
+		adminID, ok := result.InsertedID.(primitive.ObjectID)
+		if !ok {
+			log.Println("Failed to get admin user ID, skipping organization update")
+			return
+		}
+
+		_, err = organizationsCollection.UpdateOne(
+			ctx,
+			bson.M{"_id": defaultOrg.ID},
+			bson.M{"$push": bson.M{"adminIds": adminID}},
+		)
+		if err != nil {
+			log.Printf("Failed to update organization with admin ID: %v", err)
+		} else {
+			log.Println("Updated default organization with admin user ID")
+		}
+	}
 }

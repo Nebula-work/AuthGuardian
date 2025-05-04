@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { SidebarItem } from './SidebarItem';
 import { ProfileMenu } from './ProfileMenu';
-import { sidebarItems } from "./SidebarItemConfig"
+import { sidebarItems } from "../../../utils/SidebarItemConfig"
 
 interface SidebarProps {
     isCollapsed: boolean;

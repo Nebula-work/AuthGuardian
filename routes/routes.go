@@ -13,7 +13,7 @@ import (
 func SetupRoutes(app *fiber.App) {
 	// Load configuration
 	cfg, _ := config.LoadConfig()
-	
+
 	// Get database client
 	dbClient, _ := database.ConnectMongoDB(cfg.MongoURI)
 
@@ -22,7 +22,7 @@ func SetupRoutes(app *fiber.App) {
 	userHandler := handlers.NewUserHandler(cfg, dbClient)
 	orgHandler := handlers.NewOrganizationHandler(cfg, dbClient)
 	roleHandler := handlers.NewRoleHandler(cfg, dbClient)
-
+	permissionHandler := handlers.NewPermissionHandler(cfg, dbClient)
 	// Auth routes
 	auth := app.Group("/api/auth")
 	auth.Post("/register", authHandler.Register)
@@ -64,7 +64,10 @@ func SetupRoutes(app *fiber.App) {
 	roles.Delete("/:id", middleware.Authorize(database.RolesCollection, "delete", dbClient), roleHandler.DeleteRole)
 	roles.Post("/:id/permissions", middleware.Authorize(database.RolesCollection, "update", dbClient), roleHandler.AddPermissionsToRole)
 	roles.Delete("/:id/permissions", middleware.Authorize(database.RolesCollection, "update", dbClient), roleHandler.RemovePermissionsFromRole)
-	
+	// Permission routes
+	permissions := app.Group("/api/permissions", middleware.Authenticate(cfg, dbClient))
+	permissions.Get("/", middleware.Authorize(database.PermissionsCollection, "read", dbClient), permissionHandler.GetPermissions)
+
 	// Frontend assets
 	app.Static("/", "./frontend/build")
 
