@@ -1,16 +1,11 @@
-package identity
+package repository
 
 import (
 	"context"
 	"rbac-system/core/models"
-	"rbac-system/pkg/common/repository"
 	"time"
 )
 
-// Internal models with database specific fields
-// These extend the base models for database operations
-
-// User extends models.User with database specific fields
 type User struct {
 	models.User
 	OAuthAccounts []OAuthAccount `json:"-" bson:"oauthAccounts"`
@@ -38,13 +33,13 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id string) (User, error)
 
 	// FindOne finds a single user matching the filter
-	FindOne(ctx context.Context, filter repository.Filter) (User, error)
+	FindOne(ctx context.Context, filter Filter) (User, error)
 
 	// FindMany finds multiple users matching the filter
-	FindMany(ctx context.Context, filter repository.Filter, options repository.QueryOptions) ([]User, error)
+	FindMany(ctx context.Context, filter Filter, options QueryOptions) ([]User, error)
 
 	// Count counts users matching the filter
-	Count(ctx context.Context, filter repository.Filter) (int64, error)
+	Count(ctx context.Context, filter Filter) (int64, error)
 
 	// Create creates a new user
 	Create(ctx context.Context, user User) (string, error)
@@ -101,13 +96,13 @@ type OrganizationRepository interface {
 	FindByID(ctx context.Context, id string) (Organization, error)
 
 	// FindOne finds a single organization matching the filter
-	FindOne(ctx context.Context, filter repository.Filter) (Organization, error)
+	FindOne(ctx context.Context, filter Filter) (Organization, error)
 
 	// FindMany finds multiple organizations matching the filter
-	FindMany(ctx context.Context, filter repository.Filter, options repository.QueryOptions) ([]Organization, error)
+	FindMany(ctx context.Context, filter Filter, options QueryOptions) ([]Organization, error)
 
 	// Count counts organizations matching the filter
-	Count(ctx context.Context, filter repository.Filter) (int64, error)
+	Count(ctx context.Context, filter Filter) (int64, error)
 
 	// Create creates a new organization
 	Create(ctx context.Context, org Organization) (string, error)

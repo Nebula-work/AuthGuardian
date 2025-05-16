@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"rbac-system/core/models"
+	"rbac-system/pkg/common/repository"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -15,50 +16,32 @@ import (
 // Common errors
 var (
 	// ErrInvalidToken is now defined in auth_service.go
-	ErrExpiredToken     = errors.New("expired token")
-	ErrTokenNotFound    = errors.New("token not found")
-	ErrInvalidSignature = errors.New("invalid token signature")
+	ErrExpiredToken  = errors.New("expired token")
+	ErrTokenNotFound = errors.New("token not found")
 )
 
 // TokenServiceImpl implements TokenService
 type TokenServiceImpl struct {
 	jwtSecret           string
 	accessTokenDuration time.Duration
-	tokenRepository     TokenRepository
+	tokenRepository     repository.TokenRepository
 }
 
 // NewTokenService creates a new token service
-func NewTokenService(jwtSecret string, accessTokenDuration time.Duration) TokenService {
+func NewTokenService(jwtSecret string, accessTokenDuration time.Duration) repository.TokenService {
 	// Use in-memory repository as fallback
 	return NewTokenServiceWithRepository(jwtSecret, accessTokenDuration, nil)
 }
 
 // NewTokenServiceWithRepository creates a new token service with a specific repository
-func NewTokenServiceWithRepository(jwtSecret string, accessTokenDuration time.Duration, repository TokenRepository) TokenService {
-	// Create in-memory repository if none provided
-	if repository == nil {
-		repository = &inMemoryTokenRepository{
-			refreshTokens:      make(map[string]string),
-			revokedTokens:      make(map[string]bool),
-			resetTokens:        make(map[string]string),
-			verificationTokens: make(map[string]string),
-		}
-	}
+func NewTokenServiceWithRepository(jwtSecret string, accessTokenDuration time.Duration, repository repository.TokenRepository) repository.TokenService {
+	// TODO Create in-memory repository if none provided
 
 	return &TokenServiceImpl{
 		jwtSecret:           jwtSecret,
 		accessTokenDuration: accessTokenDuration,
 		tokenRepository:     repository,
 	}
-}
-
-// inMemoryTokenRepository provides legacy in-memory token storage
-// This is maintained for backwards compatibility until the transition to the new TokenRepository is complete
-type inMemoryTokenRepository struct {
-	refreshTokens      map[string]string
-	revokedTokens      map[string]bool
-	resetTokens        map[string]string
-	verificationTokens map[string]string
 }
 
 // GenerateToken generates a new JWT token
@@ -93,11 +76,15 @@ func (s *TokenServiceImpl) GenerateToken(ctx context.Context, claims models.Toke
 }
 
 // ValidateToken validates a JWT token and returns the claims
-func (s *TokenServiceImpl) ValidateToken(ctx context.Context, tokenString string) (TokenClaims, error) {
+func (s *TokenServiceImpl) ValidateToken(ctx context.Context, tokenString string) (models.TokenClaims, error) {
 	// Check if token is revoked
-	if s.revokedTokens[tokenString] {
-		return TokenClaims{}, ErrInvalidToken
+	_, err := s.tokenRepository.FindTokenByValue(ctx, models.TokenTypeRevoked, tokenString)
+	if err == nil {
+		// Token is found in revoked tokens
+		return models.TokenClaims{}, ErrInvalidToken
 	}
+	// If error is not ErrTokenNotFound, then just continue
+	// We only care if token is explicitly revoked
 
 	// Parse token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -112,9 +99,9 @@ func (s *TokenServiceImpl) ValidateToken(ctx context.Context, tokenString string
 
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return TokenClaims{}, ErrExpiredToken
+			return models.TokenClaims{}, ErrExpiredToken
 		}
-		return TokenClaims{}, ErrInvalidToken
+		return models.TokenClaims{}, ErrInvalidToken
 	}
 
 	// Extract claims
@@ -122,7 +109,7 @@ func (s *TokenServiceImpl) ValidateToken(ctx context.Context, tokenString string
 		// Extract user ID
 		userID, ok := claims["userId"].(string)
 		if !ok {
-			return TokenClaims{}, ErrInvalidToken
+			return models.TokenClaims{}, ErrInvalidToken
 		}
 
 		// Extract username
@@ -147,7 +134,7 @@ func (s *TokenServiceImpl) ValidateToken(ctx context.Context, tokenString string
 		// Extract expiration
 		expiresAt, _ := claims["exp"].(float64)
 
-		return TokenClaims{
+		return models.TokenClaims{
 			UserID:    userID,
 			Username:  username,
 			Email:     email,
@@ -157,7 +144,7 @@ func (s *TokenServiceImpl) ValidateToken(ctx context.Context, tokenString string
 		}, nil
 	}
 
-	return TokenClaims{}, ErrInvalidToken
+	return models.TokenClaims{}, ErrInvalidToken
 }
 
 // GenerateRefreshToken generates a new refresh token
@@ -170,49 +157,86 @@ func (s *TokenServiceImpl) GenerateRefreshToken(ctx context.Context, userID stri
 	}
 
 	// Encode token
-	token := base64.URLEncoding.EncodeToString(b)
+	tokenValue := base64.URLEncoding.EncodeToString(b)
+	// Store token using repository
+	token := models.Token{
+		TokenType:  models.TokenTypeRefresh,
+		TokenValue: tokenValue,
+		UserID:     userID,
+		CreatedAt:  time.Now().Format(time.RFC3339),
+		// Set ExpiresAt if needed
+	}
 
 	// Store token
-	s.refreshTokens[token] = userID
+	err = s.tokenRepository.StoreToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
 
-	return token, nil
+	return tokenValue, nil
 }
 
 // ValidateRefreshToken validates a refresh token
 func (s *TokenServiceImpl) ValidateRefreshToken(ctx context.Context, refreshToken string) (string, error) {
-	// Get user ID from token
-	userID, ok := s.refreshTokens[refreshToken]
-	if !ok {
-		return "", ErrInvalidToken
+	// Get token from reposityr
+	token, err := s.tokenRepository.FindTokenByValue(ctx, models.TokenTypeRefresh, refreshToken)
+	if err != nil {
+		if errors.Is(err, ErrTokenNotFound) {
+			return "", ErrTokenNotFound
+		}
+		if errors.Is(err, ErrExpiredToken) {
+			return "", ErrExpiredToken
+		}
 	}
 
-	return userID, nil
+	return token.UserID, nil
 }
 
 // RevokeToken revokes a token
-func (s *TokenServiceImpl) RevokeToken(ctx context.Context, token string) error {
-	// Mark token as revoked
-	s.revokedTokens[token] = true
+func (s *TokenServiceImpl) RevokeToken(ctx context.Context, tokenValue string) error {
+	token := models.Token{
+		TokenType:  models.TokenTypeRevoked,
+		TokenValue: tokenValue,
+		CreatedAt:  time.Now().Format(time.RFC3339),
+	}
+
+	if err := s.tokenRepository.StoreToken(ctx, token); err != nil {
+		return err
+	}
 
 	// Remove from refresh tokens if it's a refresh token
-	delete(s.refreshTokens, token)
+	if err := s.tokenRepository.DeleteToken(ctx, models.TokenTypeRefresh, tokenValue); err != nil {
+		// Log the error but continue
+		fmt.Printf("Error deleting refresh token: %v\n", err)
+	}
 
 	return nil
 }
 
 // RevokeAllUserTokens revokes all tokens for a user
 func (s *TokenServiceImpl) RevokeAllUserTokens(ctx context.Context, userID string) error {
-	// Remove all refresh tokens for the user
-	for token, tokenUserID := range s.refreshTokens {
-		if tokenUserID == userID {
-			delete(s.refreshTokens, token)
+	// Get all refresh tokens for the user
+	refreshTokens, err := s.tokenRepository.FindTokensByUser(ctx, models.TokenTypeRefresh, userID)
+	if err != nil {
+		return err
+	}
+
+	// Revoke all refresh tokens
+	for _, token := range refreshTokens {
+		// Store as revoked
+		revokedToken := models.Token{
+			TokenType:  models.TokenTypeRevoked,
+			TokenValue: token.TokenValue,
+			CreatedAt:  time.Now().Format(time.RFC3339),
+		}
+		if err := s.tokenRepository.StoreToken(ctx, revokedToken); err != nil {
+			// Log the error but continue
+			fmt.Printf("Error storing revoked token: %v\n", err)
 		}
 	}
 
-	// In a real implementation, we would need to keep track of
-	// all access tokens for a user and mark them as revoked
-
-	return nil
+	// Delete all refresh tokens for the user
+	return s.tokenRepository.DeleteTokensByUser(ctx, models.TokenTypeRefresh, userID)
 }
 
 // GeneratePasswordResetToken generates a password reset token
@@ -225,26 +249,50 @@ func (s *TokenServiceImpl) GeneratePasswordResetToken(ctx context.Context, userI
 	}
 
 	// Encode token
-	token := base64.URLEncoding.EncodeToString(b)
+	tokenValue := base64.URLEncoding.EncodeToString(b)
+
+	// Calculate expiration (24 hours)
+	expiresAt := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
 
 	// Store token
-	s.resetTokens[token] = userID
+	token := models.Token{
+		UserID:     userID,
+		TokenType:  models.TokenTypeReset,
+		TokenValue: tokenValue,
+		CreatedAt:  time.Now().Format(time.RFC3339),
+		ExpiresAt:  expiresAt,
+	}
 
-	return token, nil
+	err = s.tokenRepository.StoreToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenValue, nil
 }
 
 // ValidatePasswordResetToken validates a password reset token
 func (s *TokenServiceImpl) ValidatePasswordResetToken(ctx context.Context, token string) (string, error) {
-	// Get user ID from token
-	userID, ok := s.resetTokens[token]
-	if !ok {
-		return "", ErrInvalidToken
+	// Get token from repository
+	restoken, err := s.tokenRepository.FindTokenByValue(ctx, models.TokenTypeReset, token)
+	if err != nil {
+		if errors.Is(err, ErrTokenNotFound) {
+			return "", ErrInvalidToken
+		}
+		if errors.Is(err, ErrExpiredToken) {
+			return "", ErrExpiredToken
+		}
+		return "", err
 	}
 
 	// Remove token (one-time use)
-	delete(s.resetTokens, token)
+	err = s.tokenRepository.DeleteToken(ctx, models.TokenTypeReset, token)
+	if err != nil {
+		// Log error but continue
+		fmt.Printf("Error deleting reset token: %v\n", err)
+	}
 
-	return userID, nil
+	return restoken.UserID, nil
 }
 
 // GenerateEmailVerificationToken generates an email verification token
@@ -257,24 +305,48 @@ func (s *TokenServiceImpl) GenerateEmailVerificationToken(ctx context.Context, u
 	}
 
 	// Encode token
-	token := base64.URLEncoding.EncodeToString(b)
+	tokenValue := base64.URLEncoding.EncodeToString(b)
+
+	// Calculate expiration (7 days)
+	expiresAt := time.Now().Add(7 * 24 * time.Hour).Format(time.RFC3339)
 
 	// Store token
-	s.verificationTokens[token] = userID
+	token := models.Token{
+		UserID:     userID,
+		TokenType:  models.TokenTypeVerification,
+		TokenValue: tokenValue,
+		CreatedAt:  time.Now().Format(time.RFC3339),
+		ExpiresAt:  expiresAt,
+	}
 
-	return token, nil
+	err = s.tokenRepository.StoreToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenValue, nil
 }
 
 // ValidateEmailVerificationToken validates an email verification token
 func (s *TokenServiceImpl) ValidateEmailVerificationToken(ctx context.Context, token string) (string, error) {
-	// Get user ID from token
-	userID, ok := s.verificationTokens[token]
-	if !ok {
-		return "", ErrInvalidToken
+	// Get token from repository
+	tokenValue, err := s.tokenRepository.FindTokenByValue(ctx, models.TokenTypeVerification, token)
+	if err != nil {
+		if errors.Is(err, ErrTokenNotFound) {
+			return "", ErrInvalidToken
+		}
+		if errors.Is(err, ErrExpiredToken) {
+			return "", ErrExpiredToken
+		}
+		return "", err
 	}
 
 	// Remove token (one-time use)
-	delete(s.verificationTokens, token)
+	err = s.tokenRepository.DeleteToken(ctx, models.TokenTypeVerification, token)
+	if err != nil {
+		// Log error but continue
+		fmt.Printf("Error deleting verification token: %v\n", err)
+	}
 
-	return userID, nil
+	return tokenValue.UserID, nil
 }

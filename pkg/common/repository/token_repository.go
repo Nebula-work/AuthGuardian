@@ -1,19 +1,20 @@
-package auth
+package repository
 
 import (
 	"context"
-	"rbac-system/core/identity"
 	"rbac-system/core/models"
 )
 
 // AuthInfo contains authentication result information
-type AuthInfo struct {
-	Token        string        `json:"token"`
-	RefreshToken string        `json:"refreshToken"`
-	User         identity.User `json:"user"`
+type UserData struct {
+	models.User
+	OAuthAccounts []OAuthAccount `json:"-" bson:"oauthAccounts"`
 }
-
-// TokenClaims contains claims stored in JWT tokens
+type AuthInfo struct {
+	Token        string   `json:"token"`
+	RefreshToken string   `json:"refreshToken"`
+	User         UserData `json:"user"`
+}
 
 // RegisterRequest contains data needed for user registration
 type RegisterRequest struct {
@@ -93,22 +94,20 @@ type TokenRepository interface {
 	StoreToken(ctx context.Context, token models.Token) error
 
 	// FindTokenByValue finds a token by its value
-	FindTokenByValue(ctx context.Context, tokenType models.Token, tokenValue string) (models.Token, error)
+	FindTokenByValue(ctx context.Context, tokenType models.TokenType, tokenValue string) (models.Token, error)
 
 	// FindTokensByUser finds all tokens for a user
-	FindTokensByUser(ctx context.Context, tokenType models.Token, userID string) ([]models.Token, error)
+	FindTokensByUser(ctx context.Context, tokenType models.TokenType, userID string) ([]models.Token, error)
 
 	// DeleteToken deletes a token
-	DeleteToken(ctx context.Context, tokenType models.Token, tokenValue string) error
+	DeleteToken(ctx context.Context, tokenType models.TokenType, tokenValue string) error
 
 	// DeleteTokensByUser deletes all tokens for a user
-	DeleteTokensByUser(ctx context.Context, tokenType models.Token, userID string) error
+	DeleteTokensByUser(ctx context.Context, tokenType models.TokenType, userID string) error
 
 	// DeleteExpiredTokens deletes all expired tokens
 	DeleteExpiredTokens(ctx context.Context) error
 }
-
-// PasswordManager is now imported from the core/password package
 
 // OAuthService defines the interface for OAuth operations
 type OAuthService interface {

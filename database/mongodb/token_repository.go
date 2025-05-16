@@ -3,13 +3,25 @@ package mongodb
 import (
 	"context"
 	"errors"
-	"rbac-system/core/auth"
 	"rbac-system/core/models"
+	"rbac-system/pkg/common/repository"
 	"time"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+)
+
+var (
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrUserNotFound          = errors.New("user not found")
+	ErrUserInactive          = errors.New("user account is inactive")
+	ErrEmailAlreadyExists    = errors.New("email already exists")
+	ErrUsernameAlreadyExists = errors.New("username already exists")
+	ErrInvalidToken          = errors.New("invalid token")
+	ErrExpiredToken          = errors.New("expired token")
+	ErrTokenNotFound         = errors.New("token not found")
+	ErrInvalidSignature      = errors.New("invalid token signature")
 )
 
 // MongoTokenRepository implements auth.TokenRepository using MongoDB
@@ -25,7 +37,7 @@ func nowAsString() string {
 }
 
 // NewMongoTokenRepository creates a new MongoDB token repository
-func NewMongoTokenRepository(client *mongo.Client, database, collection string) auth.TokenRepository {
+func NewMongoTokenRepository(client *mongo.Client, database, collection string) repository.TokenRepository {
 	return &MongoTokenRepository{
 		client:     client,
 		database:   database,
@@ -69,7 +81,7 @@ func (r *MongoTokenRepository) FindTokenByValue(ctx context.Context, tokenType m
 	err := r.getCollection().FindOne(ctx, filter).Decode(&token)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return models.Token{}, auth.ErrTokenNotFound
+			return models.Token{}, ErrTokenNotFound
 		}
 		return models.Token{}, err
 	}
@@ -80,7 +92,7 @@ func (r *MongoTokenRepository) FindTokenByValue(ctx context.Context, tokenType m
 		if err == nil && expiresAt.Before(time.Now()) {
 			// Token is expired, delete it
 			_ = r.DeleteToken(ctx, tokenType, tokenValue)
-			return models.Token{}, auth.ErrExpiredToken
+			return models.Token{}, ErrExpiredToken
 		}
 	}
 
@@ -138,122 +150,122 @@ type InMemoryTokenRepository struct {
 	tokens map[string]models.Token // key is tokenValue
 }
 
-// NewInMemoryTokenRepository creates a new in-memory token repository
-func NewInMemoryTokenRepository() auth.TokenRepository {
-	return &InMemoryTokenRepository{
-		tokens: make(map[string]models.Token),
-	}
-}
-
-// IsConnected checks if the repository is connected
-func (r *InMemoryTokenRepository) IsConnected(ctx context.Context) bool {
-	return true
-}
-
-// StoreToken stores a token
-func (r *InMemoryTokenRepository) StoreToken(ctx context.Context, token models.Token) error {
-	// Generate ID if not provided
-	if token.ID == "" {
-		token.ID = uuid.New().String()
-	}
-
-	// Set created at if not provided
-	if token.CreatedAt == "" {
-		token.CreatedAt = nowAsString()
-	}
-
-	// Store token
-	r.tokens[token.TokenValue] = token
-
-	return nil
-}
-
-// FindTokenByValue finds a token by its value
-func (r *InMemoryTokenRepository) FindTokenByValue(ctx context.Context, tokenType models.TokenType, tokenValue string) (models.Token, error) {
-	// Find token
-	token, ok := r.tokens[tokenValue]
-	if !ok || token.TokenType != tokenType {
-		return models.Token{}, auth.ErrTokenNotFound
-	}
-
-	// Check if token is expired
-	if token.ExpiresAt != "" {
-		expiresAt, err := time.Parse(time.RFC3339, token.ExpiresAt)
-		if err == nil && expiresAt.Before(time.Now()) {
-			// Token is expired, delete it
-			delete(r.tokens, tokenValue)
-			return models.Token{}, auth.ErrExpiredToken
-		}
-	}
-
-	return token, nil
-}
-
-// FindTokensByUser finds all tokens for a user
-func (r *InMemoryTokenRepository) FindTokensByUser(ctx context.Context, tokenType models.TokenType, userID string) ([]models.Token, error) {
-	// Find tokens
-	var tokens []models.Token
-	for _, token := range r.tokens {
-		if token.TokenType == tokenType && token.UserID == userID {
-			tokens = append(tokens, token)
-		}
-	}
-
-	return tokens, nil
-}
-
-// DeleteToken deletes a token
-func (r *InMemoryTokenRepository) DeleteToken(ctx context.Context, tokenType models.TokenType, tokenValue string) error {
-	// Check if token exists
-	token, ok := r.tokens[tokenValue]
-	if !ok || token.TokenType != tokenType {
-		return nil // No error if token doesn't exist
-	}
-
-	// Delete token
-	delete(r.tokens, tokenValue)
-
-	return nil
-}
-
-// DeleteTokensByUser deletes all tokens for a user
-func (r *InMemoryTokenRepository) DeleteTokensByUser(ctx context.Context, tokenType models.TokenType, userID string) error {
-	// Find tokens to delete
-	var tokensToDelete []string
-	for tokenValue, token := range r.tokens {
-		if token.TokenType == tokenType && token.UserID == userID {
-			tokensToDelete = append(tokensToDelete, tokenValue)
-		}
-	}
-
-	// Delete tokens
-	for _, tokenValue := range tokensToDelete {
-		delete(r.tokens, tokenValue)
-	}
-
-	return nil
-}
-
-// DeleteExpiredTokens deletes all expired tokens
-func (r *InMemoryTokenRepository) DeleteExpiredTokens(ctx context.Context) error {
-	// Get current time
-	now := time.Now()
-
-	// Find tokens to delete
-	var tokensToDelete []string
-	for tokenValue, token := range r.tokens {
-		if token.ExpiresAt != "" {
-			expiresAt, err := time.Parse(time.RFC3339, token.ExpiresAt)
-			if err == nil && expiresAt.Before(now) {
-				tokensToDelete = append(tokensToDelete, tokenValue)
-			}
-		}
-	}
-
-	// Delete tokens
-	for _, tokenValue := range tokensToDelete {
-		delete(r.tokens, tokenValue)
-	}
-
-	return nil
-}
+//// NewInMemoryTokenRepository creates a new in-memory token repository
+//func NewInMemoryTokenRepository() *InMemoryTokenRepository{
+//	return &InMemoryTokenRepository{
+//		tokens: make(map[string]models.Token),
+//	}
+//}
+//
+//// IsConnected checks if the repository is connected
+//func (r *InMemoryTokenRepository) IsConnected(ctx context.Context) bool {
+//	return true
+//}
+//
+//// StoreToken stores a token
+//func (r *InMemoryTokenRepository) StoreToken(ctx context.Context, token models.Token) error {
+//	// Generate ID if not provided
+//	if token.ID == "" {
+//		token.ID = uuid.New().String()
+//	}
+//
+//	// Set created at if not provided
+//	if token.CreatedAt == "" {
+//		token.CreatedAt = nowAsString()
+//	}
+//
+//	// Store token
+//	r.tokens[token.TokenValue] = token
+//
+//	return nil
+//}
+//
+//// FindTokenByValue finds a token by its value
+//func (r *InMemoryTokenRepository) FindTokenByValue(ctx context.Context, tokenType models.TokenType, tokenValue string) (models.Token, error) {
+//	// Find token
+//	token, ok := r.tokens[tokenValue]
+//	if !ok || token.TokenType != tokenType {
+//		return models.Token{}, auth.ErrTokenNotFound
+//	}
+//
+//	// Check if token is expired
+//	if token.ExpiresAt != "" {
+//		expiresAt, err := time.Parse(time.RFC3339, token.ExpiresAt)
+//		if err == nil && expiresAt.Before(time.Now()) {
+//			// Token is expired, delete it
+//			delete(r.tokens, tokenValue)
+//			return models.Token{}, auth.ErrExpiredToken
+//		}
+//	}
+//
+//	return token, nil
+//}
+//
+//// FindTokensByUser finds all tokens for a user
+//func (r *InMemoryTokenRepository) FindTokensByUser(ctx context.Context, tokenType models.TokenType, userID string) ([]models.Token, error) {
+//	// Find tokens
+//	var tokens []models.Token
+//	for _, token := range r.tokens {
+//		if token.TokenType == tokenType && token.UserID == userID {
+//			tokens = append(tokens, token)
+//		}
+//	}
+//
+//	return tokens, nil
+//}
+//
+//// DeleteToken deletes a token
+//func (r *InMemoryTokenRepository) DeleteToken(ctx context.Context, tokenType models.TokenType, tokenValue string) error {
+//	// Check if token exists
+//	token, ok := r.tokens[tokenValue]
+//	if !ok || token.TokenType != tokenType {
+//		return nil // No error if token doesn't exist
+//	}
+//
+//	// Delete token
+//	delete(r.tokens, tokenValue)
+//
+//	return nil
+//}
+//
+//// DeleteTokensByUser deletes all tokens for a user
+//func (r *InMemoryTokenRepository) DeleteTokensByUser(ctx context.Context, tokenType models.TokenType, userID string) error {
+//	// Find tokens to delete
+//	var tokensToDelete []string
+//	for tokenValue, token := range r.tokens {
+//		if token.TokenType == tokenType && token.UserID == userID {
+//			tokensToDelete = append(tokensToDelete, tokenValue)
+//		}
+//	}
+//
+//	// Delete tokens
+//	for _, tokenValue := range tokensToDelete {
+//		delete(r.tokens, tokenValue)
+//	}
+//
+//	return nil
+//}
+//
+//// DeleteExpiredTokens deletes all expired tokens
+//func (r *InMemoryTokenRepository) DeleteExpiredTokens(ctx context.Context) error {
+//	// Get current time
+//	now := time.Now()
+//
+//	// Find tokens to delete
+//	var tokensToDelete []string
+//	for tokenValue, token := range r.tokens {
+//		if token.ExpiresAt != "" {
+//			expiresAt, err := time.Parse(time.RFC3339, token.ExpiresAt)
+//			if err == nil && expiresAt.Before(now) {
+//				tokensToDelete = append(tokensToDelete, tokenValue)
+//			}
+//		}
+//	}
+//
+//	// Delete tokens
+//	for _, tokenValue := range tokensToDelete {
+//		delete(r.tokens, tokenValue)
+//	}
+//
+//	return nil
+//}

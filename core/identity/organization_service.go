@@ -16,12 +16,12 @@ var (
 
 // OrganizationServiceImpl implements OrganizationService
 type OrganizationServiceImpl struct {
-	orgRepo  OrganizationRepository
-	userRepo UserRepository
+	orgRepo  repository.OrganizationRepository
+	userRepo repository.UserRepository
 }
 
 // NewOrganizationService creates a new organization service
-func NewOrganizationService(orgRepo OrganizationRepository, userRepo UserRepository) OrganizationService {
+func NewOrganizationService(orgRepo repository.OrganizationRepository, userRepo repository.UserRepository) OrganizationService {
 	return &OrganizationServiceImpl{
 		orgRepo:  orgRepo,
 		userRepo: userRepo,
@@ -29,7 +29,7 @@ func NewOrganizationService(orgRepo OrganizationRepository, userRepo UserReposit
 }
 
 // CreateOrganization creates a new organization
-func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, org Organization) (string, error) {
+func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, org repository.Organization) (string, error) {
 	// Validate organization
 	if org.Name == "" {
 		return "", ErrInvalidInput
@@ -63,7 +63,7 @@ func (s *OrganizationServiceImpl) CreateOrganization(ctx context.Context, org Or
 }
 
 // UpdateOrganization updates an existing organization
-func (s *OrganizationServiceImpl) UpdateOrganization(ctx context.Context, id string, org Organization) error {
+func (s *OrganizationServiceImpl) UpdateOrganization(ctx context.Context, id string, org repository.Organization) error {
 	// Get existing organization
 	existingOrg, err := s.orgRepo.FindByID(ctx, id)
 	if err != nil {
@@ -108,12 +108,12 @@ func (s *OrganizationServiceImpl) DeleteOrganization(ctx context.Context, id str
 }
 
 // GetOrganization retrieves an organization by ID
-func (s *OrganizationServiceImpl) GetOrganization(ctx context.Context, id string) (Organization, error) {
+func (s *OrganizationServiceImpl) GetOrganization(ctx context.Context, id string) (repository.Organization, error) {
 	return s.orgRepo.FindByID(ctx, id)
 }
 
 // GetOrganizations retrieves all organizations with optional filtering
-func (s *OrganizationServiceImpl) GetOrganizations(ctx context.Context, skip, limit int64) ([]Organization, int64, error) {
+func (s *OrganizationServiceImpl) GetOrganizations(ctx context.Context, skip, limit int64) ([]repository.Organization, int64, error) {
 	// Create filter
 	filter := make(map[string]interface{})
 
@@ -140,17 +140,17 @@ func (s *OrganizationServiceImpl) GetOrganizations(ctx context.Context, skip, li
 }
 
 // GetOrganizationByName retrieves an organization by name
-func (s *OrganizationServiceImpl) GetOrganizationByName(ctx context.Context, name string) (Organization, error) {
+func (s *OrganizationServiceImpl) GetOrganizationByName(ctx context.Context, name string) (repository.Organization, error) {
 	return s.orgRepo.FindByName(ctx, name)
 }
 
 // GetOrganizationByDomain retrieves an organization by domain
-func (s *OrganizationServiceImpl) GetOrganizationByDomain(ctx context.Context, domain string) (Organization, error) {
+func (s *OrganizationServiceImpl) GetOrganizationByDomain(ctx context.Context, domain string) (repository.Organization, error) {
 	return s.orgRepo.FindByDomain(ctx, domain)
 }
 
 // GetUserOrganizations retrieves organizations for a user
-func (s *OrganizationServiceImpl) GetUserOrganizations(ctx context.Context, userID string) ([]Organization, error) {
+func (s *OrganizationServiceImpl) GetUserOrganizations(ctx context.Context, userID string) ([]repository.Organization, error) {
 	// Get user
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
@@ -158,7 +158,7 @@ func (s *OrganizationServiceImpl) GetUserOrganizations(ctx context.Context, user
 	}
 
 	// Get organizations
-	orgs := make([]Organization, 0, len(user.OrganizationIDs))
+	orgs := make([]repository.Organization, 0, len(user.OrganizationIDs))
 	for _, orgID := range user.OrganizationIDs {
 		org, err := s.orgRepo.FindByID(ctx, orgID)
 		if err != nil {
@@ -262,7 +262,7 @@ func (s *OrganizationServiceImpl) IsUserAdmin(ctx context.Context, orgID, userID
 }
 
 // GetOrganizationUsers retrieves users in an organization
-func (s *OrganizationServiceImpl) GetOrganizationUsers(ctx context.Context, orgID string, skip, limit int64) ([]User, int64, error) {
+func (s *OrganizationServiceImpl) GetOrganizationUsers(ctx context.Context, orgID string, skip, limit int64) ([]repository.User, int64, error) {
 	// Get organization
 	_, err := s.orgRepo.FindByID(ctx, orgID)
 	if err != nil {
@@ -297,7 +297,7 @@ func (s *OrganizationServiceImpl) GetOrganizationUsers(ctx context.Context, orgI
 }
 
 // GetOrganizationAdmins retrieves admins of an organization
-func (s *OrganizationServiceImpl) GetOrganizationAdmins(ctx context.Context, orgID string) ([]User, error) {
+func (s *OrganizationServiceImpl) GetOrganizationAdmins(ctx context.Context, orgID string) ([]repository.User, error) {
 	// Get organization
 	org, err := s.orgRepo.FindByID(ctx, orgID)
 	if err != nil {
@@ -305,7 +305,7 @@ func (s *OrganizationServiceImpl) GetOrganizationAdmins(ctx context.Context, org
 	}
 
 	// Get admins
-	users := make([]User, 0, len(org.AdminIDs))
+	users := make([]repository.User, 0, len(org.AdminIDs))
 	for _, userID := range org.AdminIDs {
 		user, err := s.userRepo.FindByID(ctx, userID)
 		if err != nil {

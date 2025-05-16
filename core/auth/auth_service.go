@@ -3,9 +3,9 @@ package auth
 import (
 	"context"
 	"errors"
-	"rbac-system/core/identity"
 	"rbac-system/core/models"
 	"rbac-system/core/password"
+	"rbac-system/pkg/common/repository"
 	"time"
 )
 
@@ -21,13 +21,13 @@ var (
 
 // AuthServiceImpl implements AuthService
 type AuthServiceImpl struct {
-	userRepo        identity.UserRepository
-	tokenService    TokenService
+	userRepo        repository.UserRepository
+	tokenService    repository.TokenService
 	passwordManager password.PasswordManager
 }
 
 // NewAuthService creates a new authentication service
-func NewAuthService(userRepo identity.UserRepository, tokenService TokenService, passwordManager password.PasswordManager) AuthService {
+func NewAuthService(userRepo repository.UserRepository, tokenService repository.TokenService, passwordManager password.PasswordManager) repository.AuthService {
 	return &AuthServiceImpl{
 		userRepo:        userRepo,
 		tokenService:    tokenService,
@@ -36,30 +36,30 @@ func NewAuthService(userRepo identity.UserRepository, tokenService TokenService,
 }
 
 // Login authenticates a user
-func (s *AuthServiceImpl) Login(ctx context.Context, username, password string) (AuthInfo, error) {
+func (s *AuthServiceImpl) Login(ctx context.Context, username, password string) (repository.AuthInfo, error) {
 	// Get user by username
 	user, err := s.userRepo.FindByUsername(ctx, username)
 	if err != nil {
 		// Try by email
 		user, err = s.userRepo.FindByEmail(ctx, username)
 		if err != nil {
-			return AuthInfo{}, ErrInvalidCredentials
+			return repository.AuthInfo{}, ErrInvalidCredentials
 		}
 	}
 
 	// Check if user is active
 	if !user.Active {
-		return AuthInfo{}, ErrUserInactive
+		return repository.AuthInfo{}, ErrUserInactive
 	}
 
 	// Verify password
 	err = s.passwordManager.VerifyPassword(password, user.PasswordHash)
 	if err != nil {
-		return AuthInfo{}, ErrInvalidCredentials
+		return repository.AuthInfo{}, ErrInvalidCredentials
 	}
 
 	// Generate JWT token
-	claims := TokenClaims{
+	claims := models.TokenClaims{
 		UserID:    user.ID,
 		Username:  user.Username,
 		Email:     user.Email,
@@ -70,13 +70,13 @@ func (s *AuthServiceImpl) Login(ctx context.Context, username, password string) 
 
 	token, err := s.tokenService.GenerateToken(ctx, claims)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Generate refresh token
 	refreshToken, err := s.tokenService.GenerateRefreshToken(ctx, user.ID)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Update last login
@@ -85,31 +85,31 @@ func (s *AuthServiceImpl) Login(ctx context.Context, username, password string) 
 		// Non-critical error, continue
 	}
 
-	return AuthInfo{
+	return repository.AuthInfo{
 		Token:        token,
 		RefreshToken: refreshToken,
-		User:         user,
+		User:         repository.UserData(user),
 	}, nil
 }
 
 // Register creates a new user
-func (s *AuthServiceImpl) Register(ctx context.Context, request RegisterRequest) (AuthInfo, error) {
+func (s *AuthServiceImpl) Register(ctx context.Context, request repository.RegisterRequest) (repository.AuthInfo, error) {
 	// Check if email already exists
 	_, err := s.userRepo.FindByEmail(ctx, request.Email)
 	if err == nil {
-		return AuthInfo{}, ErrEmailAlreadyExists
+		return repository.AuthInfo{}, ErrEmailAlreadyExists
 	}
 
 	// Check if username already exists
 	_, err = s.userRepo.FindByUsername(ctx, request.Username)
 	if err == nil {
-		return AuthInfo{}, ErrUsernameAlreadyExists
+		return repository.AuthInfo{}, ErrUsernameAlreadyExists
 	}
 
 	// Hash password
 	passwordHash, err := s.passwordManager.HashPassword(request.Password)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Create user
@@ -117,7 +117,7 @@ func (s *AuthServiceImpl) Register(ctx context.Context, request RegisterRequest)
 	createdAt := now.Format(time.RFC3339)
 	updatedAt := createdAt
 
-	user := identity.User{
+	user := repository.User{
 		User: models.User{
 			Username:      request.Username,
 			Email:         request.Email,
@@ -135,17 +135,17 @@ func (s *AuthServiceImpl) Register(ctx context.Context, request RegisterRequest)
 	// Save user
 	userID, err := s.userRepo.Create(ctx, user)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Get created user
 	createdUser, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Generate JWT token
-	claims := TokenClaims{
+	claims := models.TokenClaims{
 		UserID:    createdUser.User.ID,
 		Username:  createdUser.User.Username,
 		Email:     createdUser.User.Email,
@@ -156,13 +156,13 @@ func (s *AuthServiceImpl) Register(ctx context.Context, request RegisterRequest)
 
 	token, err := s.tokenService.GenerateToken(ctx, claims)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Generate refresh token
 	refreshToken, err := s.tokenService.GenerateRefreshToken(ctx, createdUser.User.ID)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Update last login
@@ -171,10 +171,10 @@ func (s *AuthServiceImpl) Register(ctx context.Context, request RegisterRequest)
 		// Non-critical error, continue
 	}
 
-	return AuthInfo{
+	return repository.AuthInfo{
 		Token:        token,
 		RefreshToken: refreshToken,
-		User:         createdUser,
+		User:         repository.UserData(createdUser),
 	}, nil
 }
 
@@ -190,26 +190,26 @@ func (s *AuthServiceImpl) ValidateToken(ctx context.Context, token string) (stri
 }
 
 // RefreshToken refreshes a token
-func (s *AuthServiceImpl) RefreshToken(ctx context.Context, refreshToken string) (AuthInfo, error) {
+func (s *AuthServiceImpl) RefreshToken(ctx context.Context, refreshToken string) (repository.AuthInfo, error) {
 	// Validate refresh token
 	userID, err := s.tokenService.ValidateRefreshToken(ctx, refreshToken)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Get user
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return AuthInfo{}, ErrUserNotFound
+		return repository.AuthInfo{}, ErrUserNotFound
 	}
 
 	// Check if user is active
 	if !user.Active {
-		return AuthInfo{}, ErrUserInactive
+		return repository.AuthInfo{}, ErrUserInactive
 	}
 
 	// Generate JWT token
-	claims := TokenClaims{
+	claims := models.TokenClaims{
 		UserID:    user.ID,
 		Username:  user.Username,
 		Email:     user.Email,
@@ -220,13 +220,13 @@ func (s *AuthServiceImpl) RefreshToken(ctx context.Context, refreshToken string)
 
 	token, err := s.tokenService.GenerateToken(ctx, claims)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Generate new refresh token
 	newRefreshToken, err := s.tokenService.GenerateRefreshToken(ctx, user.ID)
 	if err != nil {
-		return AuthInfo{}, err
+		return repository.AuthInfo{}, err
 	}
 
 	// Revoke old refresh token
@@ -235,10 +235,10 @@ func (s *AuthServiceImpl) RefreshToken(ctx context.Context, refreshToken string)
 		// Non-critical error, continue
 	}
 
-	return AuthInfo{
+	return repository.AuthInfo{
 		Token:        token,
 		RefreshToken: newRefreshToken,
-		User:         user,
+		User:         repository.UserData(user),
 	}, nil
 }
 
