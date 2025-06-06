@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // Common errors
@@ -22,6 +24,31 @@ type QueryOptions struct {
 	Skip  int64
 	Limit int64
 	Sort  map[string]int // field name -> sort order (1 for asc, -1 for desc)
+}
+
+func ToMongoOptions(queryOptions QueryOptions) *options.FindOptions {
+	findOptions := options.Find()
+
+	// Set skip value
+	if queryOptions.Skip > 0 {
+		findOptions.SetSkip(queryOptions.Skip)
+	}
+
+	// Set limit value
+	if queryOptions.Limit > 0 {
+		findOptions.SetLimit(queryOptions.Limit)
+	}
+
+	// Set sort options
+	if len(queryOptions.Sort) > 0 {
+		sort := bson.D{}
+		for field, order := range queryOptions.Sort {
+			sort = append(sort, bson.E{Key: field, Value: order})
+		}
+		findOptions.SetSort(sort)
+	}
+
+	return findOptions
 }
 
 // Repository defines a generic repository interface
