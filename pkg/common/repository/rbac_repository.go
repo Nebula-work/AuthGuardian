@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"rbac-system/models"
+	"rbac-system/core/models"
 )
 
 type RoleRepository interface {

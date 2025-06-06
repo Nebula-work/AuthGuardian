@@ -7,8 +7,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"rbac-system/core/models"
 	"rbac-system/core/rbac"
-	"rbac-system/models"
 	"rbac-system/pkg/common/repository"
 	"time"
 )
@@ -115,13 +115,13 @@ func (r *MongoRoleRepository) Count(ctx context.Context, filter repository.Filte
 // Create creates a new role
 func (r *MongoRoleRepository) Create(ctx context.Context, role models.Role) (string, error) {
 	// Generate new ID if not provided
-	if role.ID.IsZero() {
-		role.ID = primitive.NewObjectID()
+	if role.ID == "" {
+		role.ID = primitive.NewObjectID().Hex()
 	}
 
 	// Set timestamps
-	role.CreatedAt = time.Now()
-	role.UpdatedAt = time.Now()
+	role.CreatedAt = nowAsString()
+	role.UpdatedAt = nowAsString()
 
 	// Insert document
 	result, err := r.getCollection().InsertOne(ctx, role)
@@ -141,7 +141,7 @@ func (r *MongoRoleRepository) Update(ctx context.Context, id string, role models
 	}
 
 	// Set update timestamp
-	role.UpdatedAt = time.Now()
+	role.UpdatedAt = nowAsString()
 
 	filter := bson.M{"_id": objectID}
 	update := bson.M{"$set": role}

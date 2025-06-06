@@ -6,7 +6,7 @@ import (
 )
 
 type Permission struct {
-	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	ID              string             `json:"id"`
 	Name            string             `bson:"name" json:"name"`
 	Description     string             `bson:"description" json:"description"`
 	Resource        string             `bson:"resource" json:"resource"`
