@@ -23,7 +23,7 @@ import (
 )
 
 func main() {
-	// Load configuration
+	// Load configuratio
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
