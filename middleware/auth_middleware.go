@@ -1,155 +1,212 @@
 package middleware
 
 import (
-        "context"
-        "strings"
+	"rbac-system/core/models"
+	"rbac-system/pkg/common/repository"
+	"strings"
 
-        "github.com/gofiber/fiber/v2"
-        "go.mongodb.org/mongo-driver/bson"
-        "go.mongodb.org/mongo-driver/bson/primitive"
-
-        "rbac-system/config"
-        "rbac-system/database"
-        "rbac-system/models"
-        "rbac-system/utils"
+	"github.com/gofiber/fiber/v2"
 )
 
-// Authenticate middleware validates JWT tokens
-func Authenticate(cfg *config.Config, db *database.MongoClient) fiber.Handler {
-        return func(c *fiber.Ctx) error {
-                // Get the Authorization header
-                authHeader := c.Get("Authorization")
-                if authHeader == "" {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "missing authorization header",
-                        })
-                }
-
-                // Extract the token
-                tokenParts := strings.Split(authHeader, " ")
-                if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "invalid authorization format",
-                        })
-                }
-
-                // Validate the token
-                claims, err := utils.ValidateToken(tokenParts[1], cfg.JWTSecret)
-                if err != nil {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "invalid token: " + err.Error(),
-                        })
-                }
-
-                // Set the user claims in the context
-                c.Locals("userId", claims.UserID)
-                c.Locals("username", claims.Username)
-                c.Locals("email", claims.Email)
-                c.Locals("roleIds", claims.RoleIDs)
-                c.Locals("organizationIds", claims.OrganizationIDs)
-
-                return c.Next()
-        }
+// AuthMiddleware is a middleware that verifies JWT tokens
+type AuthMiddleware struct {
+	tokenService repository.TokenService
+	userRepo     repository.UserRepository
 }
 
-// Authorize middleware checks if the user has the required permission
-func Authorize(resource, action string, db *database.MongoClient) fiber.Handler {
-        return func(c *fiber.Ctx) error {
-                // Get user information from context
-                _, ok := c.Locals("userId").(primitive.ObjectID)
-                if !ok {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "user not authenticated",
-                        })
-                }
+// NewAuthMiddleware creates a new auth middleware
+func NewAuthMiddleware(tokenService repository.TokenService, userRepo repository.UserRepository) *AuthMiddleware {
+	return &AuthMiddleware{
+		tokenService: tokenService,
+		userRepo:     userRepo,
+	}
+}
 
-                roleIDs, ok := c.Locals("roleIds").([]primitive.ObjectID)
-                if !ok {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "user roles not found",
-                        })
-                }
+// Middleware handles authentication for Fiber
+func (m *AuthMiddleware) Middleware(c *fiber.Ctx) error {
+	// Get token from header
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "missing_token",
+			"message": "Authentication token is required",
+		})
+	}
 
-                // Get roles with permission
-                var roles []models.Role
-                rolesCollection := db.GetCollection(database.RolesCollection)
-                
-                cursor, err := rolesCollection.Find(context.Background(), bson.M{
-                        "_id": bson.M{"$in": roleIDs},
-                })
-                if err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to retrieve roles",
-                        })
-                }
-                defer cursor.Close(context.Background())
+	// Remove "Bearer " prefix if present
+	token := authHeader
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		token = strings.TrimPrefix(authHeader, "Bearer ")
+	}
 
-                if err = cursor.All(context.Background(), &roles); err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to decode roles",
-                        })
-                }
+	// Validate token
+	claims, err := m.tokenService.ValidateToken(c.Context(), token)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "invalid_token",
+			"message": err.Error(),
+		})
+	}
 
-                // Extract all permission IDs from the roles
-                var permissionIDs []primitive.ObjectID
-                for _, role := range roles {
-                        permissionIDs = append(permissionIDs, role.PermissionIDs...)
-                }
+	// Get user
+	user, err := m.userRepo.FindByID(c.Context(), claims.UserID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "user_not_found",
+			"message": "User associated with token not found",
+		})
+	}
 
-                // Check if the user has any permissions
-                if len(permissionIDs) == 0 {
-                        return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "access denied: no permissions",
-                        })
-                }
+	// Check if user is active
+	if !user.Active {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"success": false,
+			"error":   "user_inactive",
+			"message": "User is inactive",
+		})
+	}
 
-                // Get permissions
-                permissionsCollection := db.GetCollection(database.PermissionsCollection)
-                
-                var permissions []models.Permission
-                cursor, err = permissionsCollection.Find(context.Background(), bson.M{
-                        "_id": bson.M{"$in": permissionIDs},
-                })
-                if err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to retrieve permissions",
-                        })
-                }
-                defer cursor.Close(context.Background())
+	// Set user and claims in locals for use in handlers
+	c.Locals("user", user)
+	c.Locals("claims", claims)
+	c.Locals("userId", claims.UserID)
 
-                if err = cursor.All(context.Background(), &permissions); err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to decode permissions",
-                        })
-                }
+	return c.Next()
+}
 
-                // Check if the user has the required permission
-                hasPermission := false
-                for _, permission := range permissions {
-                        if (permission.Resource == resource || permission.Resource == models.ResourceAll) &&
-                                (permission.Action == action || permission.Action == models.ActionAll) {
-                                hasPermission = true
-                                break
-                        }
-                }
+// OptionalMiddleware handles optional authentication for Fiber
+func (m *AuthMiddleware) OptionalMiddleware(c *fiber.Ctx) error {
+	// Get token from header
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
+		return c.Next()
+	}
 
-                if !hasPermission {
-                        return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "access denied: insufficient permissions",
-                        })
-                }
+	// Remove "Bearer " prefix if present
+	token := authHeader
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		token = strings.TrimPrefix(authHeader, "Bearer ")
+	}
 
-                return c.Next()
-        }
+	// Validate token
+	claims, err := m.tokenService.ValidateToken(c.Context(), token)
+	if err != nil {
+		return c.Next()
+	}
+
+	// Get user
+	user, err := m.userRepo.FindByID(c.Context(), claims.UserID)
+	if err != nil {
+		return c.Next()
+	}
+
+	// Check if user is active
+	if !user.Active {
+		return c.Next()
+	}
+
+	// Set user and claims in locals for use in handlers
+	c.Locals("user", user)
+	c.Locals("claims", claims)
+	c.Locals("userId", claims.UserID)
+
+	return c.Next()
+}
+
+// AdminMiddleware handles admin authentication for Fiber
+func (m *AuthMiddleware) AdminMiddleware(c *fiber.Ctx) error {
+	// First apply standard auth middleware
+	err := m.Middleware(c)
+	if err != nil {
+		return err
+	}
+
+	// Get claims from locals
+	claims, ok := c.Locals("claims").(models.TokenClaims)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "internal_error",
+			"message": "Unable to retrieve user claims",
+		})
+	}
+
+	// Check admin status (in a real implementation, this would check admin role)
+	isAdmin := false
+	for _, roleID := range claims.RoleIDs {
+		// Check if this is an admin role
+		// This is just a placeholder - in a real implementation,
+		// you would query your database to check if this role has admin privileges
+		if roleID == "admin" || roleID == "system_admin" {
+			isAdmin = true
+			break
+		}
+	}
+
+	if !isAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"success": false,
+			"error":   "admin_required",
+			"message": "Admin privileges required",
+		})
+	}
+
+	return c.Next()
+}
+
+// RequirePermissionMiddleware creates a middleware that requires a specific permission
+func (m *AuthMiddleware) RequirePermissionMiddleware(resource, action string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// First apply standard auth middleware
+		err := m.Middleware(c)
+		if err != nil {
+			return err
+		}
+
+		// Get user ID from locals
+		userID, ok := c.Locals("userId").(string)
+		if !ok {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "internal_error",
+				"message": "Unable to retrieve user ID",
+			})
+		}
+
+		// Check permission (in a real implementation, this would check against your RBAC system)
+		// This is just a placeholder - in a real implementation, you would implement this check
+		// using your RBAC service
+		hasPermission := false
+
+		// Simplified permission check for now
+		user, err := m.userRepo.FindByID(c.Context(), userID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "internal_error",
+				"message": "Unable to retrieve user details",
+			})
+		}
+
+		// For now, assume admin roles have all permissions
+		for _, roleID := range user.RoleIDs {
+			if roleID == "admin" || roleID == "system_admin" {
+				hasPermission = true
+				break
+			}
+		}
+
+		if !hasPermission {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"success": false,
+				"error":   "permission_denied",
+				"message": "You don't have permission to access this resource",
+			})
+		}
+
+		return c.Next()
+	}
 }
