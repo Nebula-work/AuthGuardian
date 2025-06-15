@@ -2,33 +2,34 @@ package identity
 
 import (
 	"context"
+	"rbac-system/pkg/common/repository"
 )
 
 // UserService defines the interface for user operations
 type UserService interface {
 	// CreateUser creates a new user
-	CreateUser(ctx context.Context, user User) (string, error)
+	CreateUser(ctx context.Context, user repository.User) (string, error)
 
 	// UpdateUser updates an existing user
-	UpdateUser(ctx context.Context, id string, user User) error
+	UpdateUser(ctx context.Context, id string, user repository.User) error
 
 	// DeleteUser deletes a user
 	DeleteUser(ctx context.Context, id string) error
 
 	// GetUser retrieves a user by ID
-	GetUser(ctx context.Context, id string) (User, error)
+	GetUser(ctx context.Context, id string) (repository.User, error)
 
 	// GetUsers retrieves all users with optional filtering
-	GetUsers(ctx context.Context, orgID string, skip, limit int64) ([]User, int64, error)
+	GetUsers(ctx context.Context, orgID string, skip, limit int64) ([]repository.User, int64, error)
 
 	// GetUserByUsername retrieves a user by username
-	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserByUsername(ctx context.Context, username string) (repository.User, error)
 
 	// GetUserByEmail retrieves a user by email
-	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (repository.User, error)
 
 	// GetUserByOAuthID retrieves a user by OAuth provider and ID
-	GetUserByOAuthID(ctx context.Context, provider, providerUserID string) (User, error)
+	GetUserByOAuthID(ctx context.Context, provider, providerUserID string) (repository.User, error)
 
 	// UpdateLastLogin updates a user's last login time
 	UpdateLastLogin(ctx context.Context, id string) error
@@ -70,28 +71,28 @@ type UserService interface {
 // OrganizationService defines the interface for organization operations
 type OrganizationService interface {
 	// CreateOrganization creates a new organization
-	CreateOrganization(ctx context.Context, organization Organization) (string, error)
+	CreateOrganization(ctx context.Context, organization repository.Organization) (string, error)
 
 	// UpdateOrganization updates an existing organization
-	UpdateOrganization(ctx context.Context, id string, organization Organization) error
+	UpdateOrganization(ctx context.Context, id string, organization repository.Organization) error
 
 	// DeleteOrganization deletes an organization
 	DeleteOrganization(ctx context.Context, id string) error
 
 	// GetOrganization retrieves an organization by ID
-	GetOrganization(ctx context.Context, id string) (Organization, error)
+	GetOrganization(ctx context.Context, id string) (repository.Organization, error)
 
 	// GetOrganizations retrieves all organizations with optional filtering
-	GetOrganizations(ctx context.Context, skip, limit int64) ([]Organization, int64, error)
+	GetOrganizations(ctx context.Context, skip, limit int64) ([]repository.Organization, int64, error)
 
 	// GetOrganizationByName retrieves an organization by name
-	GetOrganizationByName(ctx context.Context, name string) (Organization, error)
+	GetOrganizationByName(ctx context.Context, name string) (repository.Organization, error)
 
 	// GetOrganizationByDomain retrieves an organization by domain
-	GetOrganizationByDomain(ctx context.Context, domain string) (Organization, error)
+	GetOrganizationByDomain(ctx context.Context, domain string) (repository.Organization, error)
 
 	// GetUserOrganizations retrieves organizations for a user
-	GetUserOrganizations(ctx context.Context, userID string) ([]Organization, error)
+	GetUserOrganizations(ctx context.Context, userID string) ([]repository.Organization, error)
 
 	// AddUserToOrganization adds a user to an organization
 	AddUserToOrganization(ctx context.Context, orgID, userID string) error
@@ -109,8 +110,8 @@ type OrganizationService interface {
 	IsUserAdmin(ctx context.Context, orgID, userID string) (bool, error)
 
 	// GetOrganizationUsers retrieves users in an organization
-	GetOrganizationUsers(ctx context.Context, orgID string, skip, limit int64) ([]User, int64, error)
+	GetOrganizationUsers(ctx context.Context, orgID string, skip, limit int64) ([]repository.User, int64, error)
 
 	// GetOrganizationAdmins retrieves admins of an organization
-	GetOrganizationAdmins(ctx context.Context, orgID string) ([]User, error)
+	GetOrganizationAdmins(ctx context.Context, orgID string) ([]repository.User, error)
 }

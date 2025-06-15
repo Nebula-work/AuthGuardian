@@ -18,12 +18,12 @@ var (
 
 // UserServiceImpl implements UserService
 type UserServiceImpl struct {
-	userRepo        UserRepository
+	userRepo        repository.UserRepository
 	passwordManager password.PasswordManager
 }
 
 // NewUserService creates a new user service
-func NewUserService(userRepo UserRepository, passwordManager password.PasswordManager) UserService {
+func NewUserService(userRepo repository.UserRepository, passwordManager password.PasswordManager) UserService {
 	return &UserServiceImpl{
 		userRepo:        userRepo,
 		passwordManager: passwordManager,
@@ -31,7 +31,7 @@ func NewUserService(userRepo UserRepository, passwordManager password.PasswordMa
 }
 
 // CreateUser creates a new user
-func (s *UserServiceImpl) CreateUser(ctx context.Context, user User) (string, error) {
+func (s *UserServiceImpl) CreateUser(ctx context.Context, user repository.User) (string, error) {
 	// Validate user
 	if user.Username == "" || user.Email == "" {
 		return "", ErrInvalidInput
@@ -43,7 +43,7 @@ func (s *UserServiceImpl) CreateUser(ctx context.Context, user User) (string, er
 		return "", ErrEmailAlreadyExists
 	}
 
-	// Check if username already exists
+	// Check if the username already exists
 	_, err = s.userRepo.FindByUsername(ctx, user.Username)
 	if err == nil {
 		return "", ErrUsernameAlreadyExists
@@ -63,7 +63,7 @@ func (s *UserServiceImpl) CreateUser(ctx context.Context, user User) (string, er
 }
 
 // UpdateUser updates an existing user
-func (s *UserServiceImpl) UpdateUser(ctx context.Context, id string, user User) error {
+func (s *UserServiceImpl) UpdateUser(ctx context.Context, id string, user repository.User) error {
 	// Get existing user
 	existingUser, err := s.userRepo.FindByID(ctx, id)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *UserServiceImpl) UpdateUser(ctx context.Context, id string, user User) 
 		}
 	}
 
-	// Check if username changed and already exists
+	// Check if the username changed and already exists
 	if user.Username != existingUser.Username {
 		_, err := s.userRepo.FindByUsername(ctx, user.Username)
 		if err == nil {
@@ -109,12 +109,12 @@ func (s *UserServiceImpl) DeleteUser(ctx context.Context, id string) error {
 }
 
 // GetUser retrieves a user by ID
-func (s *UserServiceImpl) GetUser(ctx context.Context, id string) (User, error) {
+func (s *UserServiceImpl) GetUser(ctx context.Context, id string) (repository.User, error) {
 	return s.userRepo.FindByID(ctx, id)
 }
 
 // GetUsers retrieves all users with optional filtering
-func (s *UserServiceImpl) GetUsers(ctx context.Context, orgID string, skip, limit int64) ([]User, int64, error) {
+func (s *UserServiceImpl) GetUsers(ctx context.Context, orgID string, skip, limit int64) ([]repository.User, int64, error) {
 	// Create filter
 	filter := make(map[string]interface{})
 	if orgID != "" {
@@ -144,17 +144,17 @@ func (s *UserServiceImpl) GetUsers(ctx context.Context, orgID string, skip, limi
 }
 
 // GetUserByUsername retrieves a user by username
-func (s *UserServiceImpl) GetUserByUsername(ctx context.Context, username string) (User, error) {
+func (s *UserServiceImpl) GetUserByUsername(ctx context.Context, username string) (repository.User, error) {
 	return s.userRepo.FindByUsername(ctx, username)
 }
 
 // GetUserByEmail retrieves a user by email
-func (s *UserServiceImpl) GetUserByEmail(ctx context.Context, email string) (User, error) {
+func (s *UserServiceImpl) GetUserByEmail(ctx context.Context, email string) (repository.User, error) {
 	return s.userRepo.FindByEmail(ctx, email)
 }
 
 // GetUserByOAuthID retrieves a user by OAuth provider and ID
-func (s *UserServiceImpl) GetUserByOAuthID(ctx context.Context, provider, providerUserID string) (User, error) {
+func (s *UserServiceImpl) GetUserByOAuthID(ctx context.Context, provider, providerUserID string) (repository.User, error) {
 	return s.userRepo.FindByOAuthID(ctx, provider, providerUserID)
 }
 

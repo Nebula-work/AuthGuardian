@@ -2,7 +2,7 @@ package rbac
 
 import (
 	"context"
-	"rbac-system/models"
+	"rbac-system/core/models"
 	"rbac-system/pkg/common/repository"
 )
 

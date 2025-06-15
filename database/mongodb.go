@@ -10,17 +10,17 @@ import (
 
 // MongoClient wraps the MongoDB client and provides utility methods
 type MongoClient struct {
-	client     *mongo.Client
-	database   *mongo.Database
-	collection map[string]*mongo.Collection
+	Client     *mongo.Client
+	Database   *mongo.Database
+	Collection map[string]*mongo.Collection
 }
 
 // Collections in the database
 const (
-	UsersCollection        = "users"
-	RolesCollection        = "roles"
+	UsersCollection         = "users"
+	RolesCollection         = "roles"
 	OrganizationsCollection = "organizations"
-	PermissionsCollection  = "permissions"
+	PermissionsCollection   = "permissions"
 )
 
 // ConnectMongoDB connects to MongoDB and returns a client

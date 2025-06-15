@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"rbac-system/pkg/common/repository"
+	"time"
 )
 
 // Domain-specific errors
@@ -29,8 +30,9 @@ type Role struct {
 
 // RoleServiceImpl implements the RoleService interface
 type RoleServiceImpl struct {
-	roleRepo RoleRepository
-	userRepo repository.UserRepository
+	roleRepo             RoleRepository
+	userRepo             repository.UserRepository
+	PermissionRepository repository.PermissionRepository
 }
 
 // NewRoleService creates a new role service
@@ -43,43 +45,35 @@ func NewRoleService(roleRepo RoleRepository, userRepo repository.UserRepository)
 
 // GetRoles retrieves all roles, optionally filtered
 func (s *RoleServiceImpl) GetRoles(ctx context.Context, filter repository.Filter, pagination map[string]int) ([]Role, int, error) {
-	// In a real implementation, we would use the role repository
-	// to fetch roles from the database
-	return []Role{
-		{
-			ID:              "role-1",
-			Name:            "Admin",
-			Description:     "Administrator with full access",
-			PermissionIDs:   []string{"perm-1", "perm-2", "perm-3"},
-			IsSystemDefault: true,
-			CreatedAt:       "2025-01-01T00:00:00Z",
-			UpdatedAt:       "2025-01-01T00:00:00Z",
-		},
-		{
-			ID:              "role-2",
-			Name:            "User",
-			Description:     "Regular user with limited access",
-			PermissionIDs:   []string{"perm-2"},
-			IsSystemDefault: true,
-			CreatedAt:       "2025-01-01T00:00:00Z",
-			UpdatedAt:       "2025-01-01T00:00:00Z",
-		},
-	}, 2, nil
+	queryOptions := repository.QueryOptions{
+		Limit: int64(pagination["limit"]),
+		Skip:  int64(pagination["offset"]),
+		Sort:  map[string]int{"createdAt": -1},
+	}
+	role, err := s.roleRepo.FindMany(ctx, filter, queryOptions)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, 0, ErrRoleNotFound
+		}
+		return nil, 0, err
+	}
+	count, err := s.roleRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return role, int(count), nil
 }
 
 // GetRole retrieves a role by ID
 func (s *RoleServiceImpl) GetRole(ctx context.Context, id string) (*Role, error) {
-	// In a real implementation, we would use the role repository
-	// to fetch the role from the database
-	return &Role{
-		ID:              id,
-		Name:            "Sample Role",
-		Description:     "This is a sample role",
-		PermissionIDs:   []string{"perm-1", "perm-2"},
-		IsSystemDefault: false,
-		CreatedAt:       "2025-01-01T00:00:00Z",
-		UpdatedAt:       "2025-01-01T00:00:00Z",
-	}, nil
+	role, err := s.roleRepo.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrRoleNotFound
+		}
+		return nil, err
+	}
+	return &role, nil
 }
 
 // CreateRole creates a new role
@@ -101,23 +95,26 @@ func (s *RoleServiceImpl) CreateRole(ctx context.Context, role Role) (*Role, err
 
 	// Validate permissions if any are provided
 	if len(role.PermissionIDs) > 0 {
-		// In a real implementation, we would validate all permission IDs
-		// by checking if they exist in the permission repository
-
-		// For now, we'll assume all permissions are valid
-		// If not, we would return ErrInvalidPermissions
+		permissions, err := s.PermissionRepository.FindByIDs(ctx, role.PermissionIDs)
+		if err != nil {
+			return nil, err
+		}
+		if len(permissions) != len(role.PermissionIDs) {
+			return nil, ErrInvalidPermissions
+		}
 	}
 
 	// Set defaults
-	role.ID = "new-role-id"                 // In a real implementation, this would be generated
-	role.CreatedAt = "2025-01-01T00:00:00Z" // In a real implementation, this would be the current time
-	role.UpdatedAt = "2025-01-01T00:00:00Z" // In a real implementation, this would be the current time
-	role.IsSystemDefault = false            // User-created roles are never system defaults
+	role.CreatedAt = time.Now().Format(time.RFC3339)
+	role.UpdatedAt = time.Now().Format(time.RFC3339) // In a real implementation, this would be the current time
+	role.IsSystemDefault = false                     // User-created roles are never system defaults
 
-	// In a real implementation, we would use the role repository
-	// to save the role to the database
-	// If that fails, we would return an appropriate error
+	roleID, err := s.roleRepo.Create(ctx, role)
+	if err != nil {
+		return nil, err
+	}
 
+	role.ID = roleID
 	return &role, nil
 }
 
