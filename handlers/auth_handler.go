@@ -1,282 +1,283 @@
 package handlers
 
 import (
-        "context"
-        "strings"
-        "time"
-        "net/http"
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
 
-        "github.com/gofiber/fiber/v2"
-        "github.com/gofiber/fiber/v2/middleware/adaptor"
-        "github.com/markbates/goth"
-        "github.com/markbates/goth/gothic"
-        "github.com/markbates/goth/providers/github"
-        "github.com/markbates/goth/providers/google"
-        "go.mongodb.org/mongo-driver/bson"
-        "go.mongodb.org/mongo-driver/bson/primitive"
-        "go.mongodb.org/mongo-driver/mongo"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/markbates/goth"
+	"github.com/markbates/goth/gothic"
+	"github.com/markbates/goth/providers/github"
+	"github.com/markbates/goth/providers/google"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 
-        "rbac-system/config"
-        "rbac-system/database"
-        "rbac-system/models"
-        "rbac-system/utils"
+	"rbac-system/config"
+	"rbac-system/database"
+	"rbac-system/models"
+	"rbac-system/utils"
 )
 
 // AuthHandler handles authentication requests
 type AuthHandler struct {
-        config *config.Config
-        db     *database.MongoClient
+	config *config.Config
+	db     *database.MongoClient
 }
 
 // NewAuthHandler creates a new auth handler
 func NewAuthHandler(cfg *config.Config, db *database.MongoClient) *AuthHandler {
-        // Initialize OAuth providers
-        goth.UseProviders(
-                google.New(
-                        cfg.GoogleClientID,
-                        cfg.GoogleClientSecret,
-                        "http://localhost:5000/api/auth/oauth/google/callback",
-                        "email", "profile",
-                ),
-                github.New(
-                        cfg.GitHubClientID,
-                        cfg.GitHubClientSecret,
-                        "http://localhost:5000/api/auth/oauth/github/callback",
-                        "user:email",
-                ),
-        )
+	// Initialize OAuth providers
+	goth.UseProviders(
+		google.New(
+			cfg.GoogleClientID,
+			cfg.GoogleClientSecret,
+			"http://localhost:5000/api/auth/oauth/google/callback",
+			"email", "profile",
+		),
+		github.New(
+			cfg.GitHubClientID,
+			cfg.GitHubClientSecret,
+			"http://localhost:5000/api/auth/oauth/github/callback",
+			"user:email",
+		),
+	)
 
-        return &AuthHandler{
-                config: cfg,
-                db:     db,
-        }
+	return &AuthHandler{
+		config: cfg,
+		db:     db,
+	}
 }
 
 // Register handles user registration
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
-        // Parse request body
-        var input models.UserCreateInput
-        if err := c.BodyParser(&input); err != nil {
-                return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Invalid request body",
-                })
-        }
+	// Parse request body
+	var input models.UserCreateInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+	}
 
-        // Validate required fields
-        if input.Username == "" || input.Email == "" || input.Password == "" {
-                return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Username, email, and password are required",
-                })
-        }
+	// Validate required fields
+	if input.Username == "" || input.Email == "" || input.Password == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Username, email, and password are required",
+		})
+	}
 
-        // Check if username or email already exists
-        collection := h.db.GetCollection(database.UsersCollection)
-        existingUser := models.User{}
-        
-        err := collection.FindOne(
-                context.Background(),
-                bson.M{
-                        "$or": []bson.M{
-                                {"username": input.Username},
-                                {"email": input.Email},
-                        },
-                },
-        ).Decode(&existingUser)
+	// Check if username or email already exists
+	collection := h.db.GetCollection(database.UsersCollection)
+	existingUser := models.User{}
 
-        if err == nil {
-                return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Username or email already exists",
-                })
-        } else if err != mongo.ErrNoDocuments {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to check for existing user",
-                })
-        }
+	err := collection.FindOne(
+		context.Background(),
+		bson.M{
+			"$or": []bson.M{
+				{"username": input.Username},
+				{"email": input.Email},
+			},
+		},
+	).Decode(&existingUser)
 
-        // Hash password
-        hashedPassword, err := utils.HashPassword(input.Password)
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to hash password",
-                })
-        }
+	if err == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"success": false,
+			"error":   "Username or email already exists",
+		})
+	} else if err != mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to check for existing user",
+		})
+	}
 
-        // Get the default user role
-        rolesCollection := h.db.GetCollection(database.RolesCollection)
-        defaultRole := models.Role{}
-        
-        err = rolesCollection.FindOne(
-                context.Background(),
-                bson.M{"name": models.UserRole, "isSystemDefault": true},
-        ).Decode(&defaultRole)
+	// Hash password
+	hashedPassword, err := utils.HashPassword(input.Password)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to hash password",
+		})
+	}
 
-        var roleIDs []primitive.ObjectID
-        if err == nil {
-                roleIDs = append(roleIDs, defaultRole.ID)
-        } else if err != mongo.ErrNoDocuments {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to retrieve default role",
-                })
-        }
+	// Get the default user role
+	rolesCollection := h.db.GetCollection(database.RolesCollection)
+	defaultRole := models.Role{}
 
-        // Create user
-        user := models.User{
-                Username:       input.Username,
-                Email:          input.Email,
-                HashedPassword: hashedPassword,
-                FirstName:      input.FirstName,
-                LastName:       input.LastName,
-                Active:         true,
-                EmailVerified:  false,
-                RoleIDs:        roleIDs,
-                OrganizationIDs: input.OrganizationIDs,
-                AuthProvider:   models.LocalAuth,
-                CreatedAt:      time.Now(),
-                UpdatedAt:      time.Now(),
-        }
+	err = rolesCollection.FindOne(
+		context.Background(),
+		bson.M{"name": models.UserRole, "isSystemDefault": true},
+	).Decode(&defaultRole)
 
-        result, err := collection.InsertOne(context.Background(), user)
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to create user",
-                })
-        }
+	var roleIDs []primitive.ObjectID
+	if err == nil {
+		roleIDs = append(roleIDs, defaultRole.ID)
+	} else if err != mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to retrieve default role",
+		})
+	}
 
-        // Get the inserted ID
-        user.ID = result.InsertedID.(primitive.ObjectID)
+	// Create user
+	user := models.User{
+		Username:        input.Username,
+		Email:           input.Email,
+		HashedPassword:  hashedPassword,
+		FirstName:       input.FirstName,
+		LastName:        input.LastName,
+		Active:          true,
+		EmailVerified:   false,
+		RoleIDs:         roleIDs,
+		OrganizationIDs: input.OrganizationIDs,
+		AuthProvider:    models.LocalAuth,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
 
-        // Generate JWT token
-        token, err := utils.GenerateToken(
-                user.ID,
-                user.Username,
-                user.Email,
-                user.RoleIDs,
-                user.OrganizationIDs,
-                h.config.JWTSecret,
-                h.config.JWTExpirationTime,
-        )
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to generate token",
-                })
-        }
+	result, err := collection.InsertOne(context.Background(), user)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to create user",
+		})
+	}
 
-        // Return success response
-        return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-                "success": true,
-                "token":   token,
-                "user":    user.ToUserResponse(),
-        })
+	// Get the inserted ID
+	user.ID = result.InsertedID.(primitive.ObjectID)
+
+	// Generate JWT token
+	token, err := utils.GenerateToken(
+		user.ID,
+		user.Username,
+		user.Email,
+		user.RoleIDs,
+		user.OrganizationIDs,
+		h.config.JWTSecret,
+		h.config.JWTExpirationTime,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+	}
+
+	// Return success response
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"success": true,
+		"token":   token,
+		"user":    user.ToUserResponse(),
+	})
 }
 
 // Login authenticates a user
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
-        // Parse request body
-        var input models.UserLoginInput
-        if err := c.BodyParser(&input); err != nil {
-                return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Invalid request body",
-                })
-        }
+	// Parse request body
+	var input models.UserLoginInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+	}
 
-        // Validate required fields
-        if input.Username == "" || input.Password == "" {
-                return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Username and password are required",
-                })
-        }
+	// Validate required fields
+	fmt.Println(input)
+	if input.Username == "" || input.Password == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Username and password are required",
+		})
+	}
 
-        // Find user by username
-        collection := h.db.GetCollection(database.UsersCollection)
-        user := models.User{}
-        
-        err := collection.FindOne(
-                context.Background(),
-                bson.M{"username": input.Username, "authProvider": models.LocalAuth},
-        ).Decode(&user)
+	// Find user by username
+	collection := h.db.GetCollection(database.UsersCollection)
+	user := models.User{}
 
-        if err == mongo.ErrNoDocuments {
-                return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Invalid credentials",
-                })
-        } else if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to retrieve user",
-                })
-        }
+	err := collection.FindOne(
+		context.Background(),
+		bson.M{"username": input.Username, "authProvider": models.LocalAuth},
+	).Decode(&user)
 
-        // Verify password
-        valid, err := utils.VerifyPassword(input.Password, user.HashedPassword)
-        if err != nil || !valid {
-                return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Invalid credentials",
-                })
-        }
+	if err == mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid credentials",
+		})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to retrieve user",
+		})
+	}
 
-        // Check if user is active
-        if !user.Active {
-                return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "User account is disabled",
-                })
-        }
+	// Verify password
+	valid, err := utils.VerifyPassword(input.Password, user.HashedPassword)
+	if err != nil || !valid {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid credentials",
+		})
+	}
 
-        // Update last login
-        _, err = collection.UpdateOne(
-                context.Background(),
-                bson.M{"_id": user.ID},
-                bson.M{"$set": bson.M{"lastLogin": time.Now()}},
-        )
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to update last login",
-                })
-        }
+	// Check if user is active
+	if !user.Active {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"success": false,
+			"error":   "User account is disabled",
+		})
+	}
 
-        // Generate JWT token
-        token, err := utils.GenerateToken(
-                user.ID,
-                user.Username,
-                user.Email,
-                user.RoleIDs,
-                user.OrganizationIDs,
-                h.config.JWTSecret,
-                h.config.JWTExpirationTime,
-        )
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to generate token",
-                })
-        }
+	// Update last login
+	_, err = collection.UpdateOne(
+		context.Background(),
+		bson.M{"_id": user.ID},
+		bson.M{"$set": bson.M{"lastLogin": time.Now()}},
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to update last login",
+		})
+	}
 
-        // Return success response
-        return c.Status(fiber.StatusOK).JSON(fiber.Map{
-                "success": true,
-                "token":   token,
-                "user":    user.ToUserResponse(),
-        })
+	// Generate JWT token
+	token, err := utils.GenerateToken(
+		user.ID,
+		user.Username,
+		user.Email,
+		user.RoleIDs,
+		user.OrganizationIDs,
+		h.config.JWTSecret,
+		h.config.JWTExpirationTime,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+	}
+
+	// Return success response
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
+		"token":   token,
+		"user":    user.ToUserResponse(),
+	})
 }
 
 // GoogleOAuth initiates Google OAuth flow
 func (h *AuthHandler) GoogleOAuth(c *fiber.Ctx) error {
 	return adaptor.HTTPHandlerFunc(gothic.BeginAuthHandler)(c)
 }
-
 
 // GoogleOAuthCallback handles the Google OAuth callback
 func (h *AuthHandler) GoogleOAuthCallback(c *fiber.Ctx) error {
@@ -294,12 +295,10 @@ func (h *AuthHandler) GoogleOAuthCallback(c *fiber.Ctx) error {
 	})(c)
 }
 
-
 // GitHubOAuth initiates GitHub OAuth flow
 func (h *AuthHandler) GitHubOAuth(c *fiber.Ctx) error {
 	return adaptor.HTTPHandlerFunc(gothic.BeginAuthHandler)(c)
 }
-
 
 // GitHubOAuthCallback handles the GitHub OAuth callback
 func (h *AuthHandler) GitHubOAuthCallback(c *fiber.Ctx) error {
@@ -317,244 +316,243 @@ func (h *AuthHandler) GitHubOAuthCallback(c *fiber.Ctx) error {
 	})(c)
 }
 
-
 // handleOAuthUser processes the authenticated OAuth user
 func (h *AuthHandler) handleOAuthUser(c *fiber.Ctx, gothUser goth.User, provider models.AuthProvider) error {
-        // Extract user info
-        oauthInfo := models.OAuthUserInfo{
-                ID:        gothUser.UserID,
-                Email:     gothUser.Email,
-                FirstName: gothUser.FirstName,
-                LastName:  gothUser.LastName,
-                Username:  gothUser.NickName,
-        }
+	// Extract user info
+	oauthInfo := models.OAuthUserInfo{
+		ID:        gothUser.UserID,
+		Email:     gothUser.Email,
+		FirstName: gothUser.FirstName,
+		LastName:  gothUser.LastName,
+		Username:  gothUser.NickName,
+	}
 
-        // If no username, use email as fallback
-        if oauthInfo.Username == "" {
-                oauthInfo.Username = oauthInfo.Email
-        }
+	// If no username, use email as fallback
+	if oauthInfo.Username == "" {
+		oauthInfo.Username = oauthInfo.Email
+	}
 
-        // Check if user already exists
-        collection := h.db.GetCollection(database.UsersCollection)
-        existingUser := models.User{}
-        
-        err := collection.FindOne(
-                context.Background(),
-                bson.M{
-                        "$or": []bson.M{
-                                {"email": oauthInfo.Email, "authProvider": provider},
-                                {"providerUserId": oauthInfo.ID, "authProvider": provider},
-                        },
-                },
-        ).Decode(&existingUser)
+	// Check if user already exists
+	collection := h.db.GetCollection(database.UsersCollection)
+	existingUser := models.User{}
 
-        if err == nil {
-                // User exists, update last login
-                _, err = collection.UpdateOne(
-                        context.Background(),
-                        bson.M{"_id": existingUser.ID},
-                        bson.M{"$set": bson.M{"lastLogin": time.Now()}},
-                )
-                if err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "Failed to update last login",
-                        })
-                }
+	err := collection.FindOne(
+		context.Background(),
+		bson.M{
+			"$or": []bson.M{
+				{"email": oauthInfo.Email, "authProvider": provider},
+				{"providerUserId": oauthInfo.ID, "authProvider": provider},
+			},
+		},
+	).Decode(&existingUser)
 
-                // Generate JWT token
-                token, err := utils.GenerateToken(
-                        existingUser.ID,
-                        existingUser.Username,
-                        existingUser.Email,
-                        existingUser.RoleIDs,
-                        existingUser.OrganizationIDs,
-                        h.config.JWTSecret,
-                        h.config.JWTExpirationTime,
-                )
-                if err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "Failed to generate token",
-                        })
-                }
+	if err == nil {
+		// User exists, update last login
+		_, err = collection.UpdateOne(
+			context.Background(),
+			bson.M{"_id": existingUser.ID},
+			bson.M{"$set": bson.M{"lastLogin": time.Now()}},
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "Failed to update last login",
+			})
+		}
 
-                // Return success response
-                return c.Status(fiber.StatusOK).JSON(fiber.Map{
-                        "success": true,
-                        "token":   token,
-                        "user":    existingUser.ToUserResponse(),
-                })
-        } else if err != mongo.ErrNoDocuments {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to check for existing user",
-                })
-        }
+		// Generate JWT token
+		token, err := utils.GenerateToken(
+			existingUser.ID,
+			existingUser.Username,
+			existingUser.Email,
+			existingUser.RoleIDs,
+			existingUser.OrganizationIDs,
+			h.config.JWTSecret,
+			h.config.JWTExpirationTime,
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "Failed to generate token",
+			})
+		}
 
-        // User doesn't exist, create new user
-        // Get the default user role
-        rolesCollection := h.db.GetCollection(database.RolesCollection)
-        defaultRole := models.Role{}
-        
-        err = rolesCollection.FindOne(
-                context.Background(),
-                bson.M{"name": models.UserRole, "isSystemDefault": true},
-        ).Decode(&defaultRole)
+		// Return success response
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"success": true,
+			"token":   token,
+			"user":    existingUser.ToUserResponse(),
+		})
+	} else if err != mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to check for existing user",
+		})
+	}
 
-        var roleIDs []primitive.ObjectID
-        if err == nil {
-                roleIDs = append(roleIDs, defaultRole.ID)
-        } else if err != mongo.ErrNoDocuments {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to retrieve default role",
-                })
-        }
+	// User doesn't exist, create new user
+	// Get the default user role
+	rolesCollection := h.db.GetCollection(database.RolesCollection)
+	defaultRole := models.Role{}
 
-        // Create user
-        user := models.User{
-                Username:       oauthInfo.Username,
-                Email:          oauthInfo.Email,
-                FirstName:      oauthInfo.FirstName,
-                LastName:       oauthInfo.LastName,
-                Active:         true,
-                EmailVerified:  true, // Email is verified by OAuth provider
-                RoleIDs:        roleIDs,
-                AuthProvider:   provider,
-                ProviderUserID: oauthInfo.ID,
-                CreatedAt:      time.Now(),
-                UpdatedAt:      time.Now(),
-                LastLogin:      time.Now(),
-        }
+	err = rolesCollection.FindOne(
+		context.Background(),
+		bson.M{"name": models.UserRole, "isSystemDefault": true},
+	).Decode(&defaultRole)
 
-        result, err := collection.InsertOne(context.Background(), user)
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to create user",
-                })
-        }
+	var roleIDs []primitive.ObjectID
+	if err == nil {
+		roleIDs = append(roleIDs, defaultRole.ID)
+	} else if err != mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to retrieve default role",
+		})
+	}
 
-        // Get the inserted ID
-        user.ID = result.InsertedID.(primitive.ObjectID)
+	// Create user
+	user := models.User{
+		Username:       oauthInfo.Username,
+		Email:          oauthInfo.Email,
+		FirstName:      oauthInfo.FirstName,
+		LastName:       oauthInfo.LastName,
+		Active:         true,
+		EmailVerified:  true, // Email is verified by OAuth provider
+		RoleIDs:        roleIDs,
+		AuthProvider:   provider,
+		ProviderUserID: oauthInfo.ID,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		LastLogin:      time.Now(),
+	}
 
-        // Generate JWT token
-        token, err := utils.GenerateToken(
-                user.ID,
-                user.Username,
-                user.Email,
-                user.RoleIDs,
-                user.OrganizationIDs,
-                h.config.JWTSecret,
-                h.config.JWTExpirationTime,
-        )
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to generate token",
-                })
-        }
+	result, err := collection.InsertOne(context.Background(), user)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to create user",
+		})
+	}
 
-        // Return success response
-        return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-                "success": true,
-                "token":   token,
-                "user":    user.ToUserResponse(),
-        })
+	// Get the inserted ID
+	user.ID = result.InsertedID.(primitive.ObjectID)
+
+	// Generate JWT token
+	token, err := utils.GenerateToken(
+		user.ID,
+		user.Username,
+		user.Email,
+		user.RoleIDs,
+		user.OrganizationIDs,
+		h.config.JWTSecret,
+		h.config.JWTExpirationTime,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+	}
+
+	// Return success response
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"success": true,
+		"token":   token,
+		"user":    user.ToUserResponse(),
+	})
 }
 
 // RefreshToken refreshes an existing token
 func (h *AuthHandler) RefreshToken(c *fiber.Ctx) error {
-        // Get the Authorization header
-        authHeader := c.Get("Authorization")
-        if authHeader == "" {
-                return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Missing authorization header",
-                })
-        }
+	// Get the Authorization header
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Missing authorization header",
+		})
+	}
 
-        // Extract the token
-        tokenParts := strings.Split(authHeader, " ")
-        if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-                return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Invalid authorization format",
-                })
-        }
+	// Extract the token
+	tokenParts := strings.Split(authHeader, " ")
+	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid authorization format",
+		})
+	}
 
-        // Validate the token
-        claims, err := utils.ValidateToken(tokenParts[1], h.config.JWTSecret)
-        if err != nil {
-                return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Invalid token: " + err.Error(),
-                })
-        }
+	// Validate the token
+	claims, err := utils.ValidateToken(tokenParts[1], h.config.JWTSecret)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid token: " + err.Error(),
+		})
+	}
 
-        // Find user by ID
-        collection := h.db.GetCollection(database.UsersCollection)
-        user := models.User{}
-        
-        err = collection.FindOne(
-                context.Background(),
-                bson.M{"_id": claims.UserID},
-        ).Decode(&user)
+	// Find user by ID
+	collection := h.db.GetCollection(database.UsersCollection)
+	user := models.User{}
 
-        if err == mongo.ErrNoDocuments {
-                return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "User not found",
-                })
-        } else if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to retrieve user",
-                })
-        }
+	err = collection.FindOne(
+		context.Background(),
+		bson.M{"_id": claims.UserID},
+	).Decode(&user)
 
-        // Check if user is active
-        if !user.Active {
-                return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "User account is disabled",
-                })
-        }
+	if err == mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "User not found",
+		})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to retrieve user",
+		})
+	}
 
-        // Generate new JWT token
-        newToken, err := utils.GenerateToken(
-                user.ID,
-                user.Username,
-                user.Email,
-                user.RoleIDs,
-                user.OrganizationIDs,
-                h.config.JWTSecret,
-                h.config.JWTExpirationTime,
-        )
-        if err != nil {
-                return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                        "success": false,
-                        "error":   "Failed to generate token",
-                })
-        }
+	// Check if user is active
+	if !user.Active {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"success": false,
+			"error":   "User account is disabled",
+		})
+	}
 
-        // Return success response
-        return c.Status(fiber.StatusOK).JSON(fiber.Map{
-                "success": true,
-                "token":   newToken,
-                "user":    user.ToUserResponse(),
-        })
+	// Generate new JWT token
+	newToken, err := utils.GenerateToken(
+		user.ID,
+		user.Username,
+		user.Email,
+		user.RoleIDs,
+		user.OrganizationIDs,
+		h.config.JWTSecret,
+		h.config.JWTExpirationTime,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+	}
+
+	// Return success response
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
+		"token":   newToken,
+		"user":    user.ToUserResponse(),
+	})
 }
 
 // Logout handles user logout
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-        // JWT is stateless, so there's not much to do on the server side
-        // In a real app, you might want to blacklist the token
+	// JWT is stateless, so there's not much to do on the server side
+	// In a real app, you might want to blacklist the token
 
-        // Return success response
-        return c.Status(fiber.StatusOK).JSON(fiber.Map{
-                "success": true,
-                "message": "Logged out successfully",
-        })
+	// Return success response
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
+		"message": "Logged out successfully",
+	})
 }
