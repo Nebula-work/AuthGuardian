@@ -111,6 +111,46 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/auth/refresh-token": {
+            "post": {
+                "description": "Generates a new access token using a valid refresh token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Refresh Access Token",
+                "parameters": [
+                    {
+                        "description": "Refresh Token",
+                        "name": "refreshToken",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "New access token generated successfully"
+                    },
+                    "400": {
+                        "description": "Invalid request body or missing refresh token"
+                    },
+                    "401": {
+                        "description": "Invalid or expired refresh token"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            }
+        },
         "/api/auth/register": {
             "post": {
                 "description": "Creates a new user account with the provided details",
@@ -147,9 +187,6 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Username or email already exists"
-                    },
-                    "500": {
-                        "description": "Internal server error"
                     }
                 }
             }
@@ -398,9 +435,6 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "List of users retrieved successfully"
-                    },
                     "400": {
                         "description": "Invalid organization ID"
                     },

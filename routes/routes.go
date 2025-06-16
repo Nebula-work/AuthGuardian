@@ -32,6 +32,8 @@ func SetupRoutes(app *fiber.App) {
 	auth.Get("/oauth/github", authHandler.GitHubOAuth)
 	auth.Get("/oauth/github/callback", authHandler.GitHubOAuthCallback)
 	auth.Post("/refresh", authHandler.RefreshToken)
+	auth.Post("/refresh-token", authHandler.RefreshAccesTokenUsingRefreshToken)
+
 	auth.Post("/logout", middleware.Authenticate(cfg, dbClient), authHandler.Logout)
 
 	// User routes

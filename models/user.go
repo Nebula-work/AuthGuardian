@@ -32,6 +32,7 @@ type User struct {
 	OrganizationIDs []primitive.ObjectID `bson:"organizationIds" json:"organizationIds"`
 	AuthProvider    AuthProvider         `bson:"authProvider" json:"authProvider"`
 	ProviderUserID  string               `bson:"providerUserId,omitempty" json:"providerUserId,omitempty"`
+	RefreshToken    string               `bson:"refreshToken" json:"refreshToken"`
 	CreatedAt       time.Time            `bson:"createdAt" json:"createdAt"`
 	UpdatedAt       time.Time            `bson:"updatedAt" json:"updatedAt"`
 	LastLogin       time.Time            `bson:"lastLogin,omitempty" json:"lastLogin,omitempty"`
@@ -39,62 +40,62 @@ type User struct {
 
 // UserCreateInput represents the input to create a new user
 type UserCreateInput struct {
-	Username      string               `json:"username" validate:"required"`
-	Email         string               `json:"email" validate:"required,email"`
-	Password      string               `json:"password,omitempty" validate:"omitempty,min=8"`
-	FirstName     string               `json:"firstName" validate:"required"`
-	LastName      string               `json:"lastName" validate:"required"`
-	RoleIDs       []primitive.ObjectID `json:"roleIds,omitempty"`
+	Username        string               `json:"username" validate:"required"`
+	Email           string               `json:"email" validate:"required,email"`
+	Password        string               `json:"password,omitempty" validate:"omitempty,min=8"`
+	FirstName       string               `json:"firstName" validate:"required"`
+	LastName        string               `json:"lastName" validate:"required"`
+	RoleIDs         []primitive.ObjectID `json:"roleIds,omitempty"`
 	OrganizationIDs []primitive.ObjectID `json:"organizationIds,omitempty"`
-	AuthProvider  AuthProvider         `json:"authProvider" validate:"required"`
-	ProviderUserID string              `json:"providerUserId,omitempty"`
+	AuthProvider    AuthProvider         `json:"authProvider" validate:"required"`
+	ProviderUserID  string               `json:"providerUserId,omitempty"`
 }
 
 // UserUpdateInput represents the input to update a user
 type UserUpdateInput struct {
-	Username      string               `json:"username,omitempty"`
-	Email         string               `json:"email,omitempty" validate:"omitempty,email"`
-	Password      string               `json:"password,omitempty" validate:"omitempty,min=8"`
-	FirstName     string               `json:"firstName,omitempty"`
-	LastName      string               `json:"lastName,omitempty"`
-	Active        *bool                `json:"active,omitempty"`
-	RoleIDs       []primitive.ObjectID `json:"roleIds,omitempty"`
+	Username        string               `json:"username,omitempty"`
+	Email           string               `json:"email,omitempty" validate:"omitempty,email"`
+	Password        string               `json:"password,omitempty" validate:"omitempty,min=8"`
+	FirstName       string               `json:"firstName,omitempty"`
+	LastName        string               `json:"lastName,omitempty"`
+	Active          *bool                `json:"active,omitempty"`
+	RoleIDs         []primitive.ObjectID `json:"roleIds,omitempty"`
 	OrganizationIDs []primitive.ObjectID `json:"organizationIds,omitempty"`
 }
 
 // UserResponse represents the response for user endpoints
 type UserResponse struct {
-	ID             primitive.ObjectID   `json:"id,omitempty"`
-	Username       string               `json:"username"`
-	Email          string               `json:"email"`
-	FirstName      string               `json:"firstName"`
-	LastName       string               `json:"lastName"`
-	Active         bool                 `json:"active"`
-	EmailVerified  bool                 `json:"emailVerified"`
-	RoleIDs        []primitive.ObjectID `json:"roleIds"`
+	ID              primitive.ObjectID   `json:"id,omitempty"`
+	Username        string               `json:"username"`
+	Email           string               `json:"email"`
+	FirstName       string               `json:"firstName"`
+	LastName        string               `json:"lastName"`
+	Active          bool                 `json:"active"`
+	EmailVerified   bool                 `json:"emailVerified"`
+	RoleIDs         []primitive.ObjectID `json:"roleIds"`
 	OrganizationIDs []primitive.ObjectID `json:"organizationIds"`
-	AuthProvider   AuthProvider         `json:"authProvider"`
-	CreatedAt      time.Time            `json:"createdAt"`
-	UpdatedAt      time.Time            `json:"updatedAt"`
-	LastLogin      time.Time            `json:"lastLogin,omitempty"`
+	AuthProvider    AuthProvider         `json:"authProvider"`
+	CreatedAt       time.Time            `json:"createdAt"`
+	UpdatedAt       time.Time            `json:"updatedAt"`
+	LastLogin       time.Time            `json:"lastLogin,omitempty"`
 }
 
 // ToUserResponse converts a User to a UserResponse
 func (u *User) ToUserResponse() UserResponse {
 	return UserResponse{
-		ID:             u.ID,
-		Username:       u.Username,
-		Email:          u.Email,
-		FirstName:      u.FirstName,
-		LastName:       u.LastName,
-		Active:         u.Active,
-		EmailVerified:  u.EmailVerified,
-		RoleIDs:        u.RoleIDs,
+		ID:              u.ID,
+		Username:        u.Username,
+		Email:           u.Email,
+		FirstName:       u.FirstName,
+		LastName:        u.LastName,
+		Active:          u.Active,
+		EmailVerified:   u.EmailVerified,
+		RoleIDs:         u.RoleIDs,
 		OrganizationIDs: u.OrganizationIDs,
-		AuthProvider:   u.AuthProvider,
-		CreatedAt:      u.CreatedAt,
-		UpdatedAt:      u.UpdatedAt,
-		LastLogin:      u.LastLogin,
+		AuthProvider:    u.AuthProvider,
+		CreatedAt:       u.CreatedAt,
+		UpdatedAt:       u.UpdatedAt,
+		LastLogin:       u.LastLogin,
 	}
 }
 

@@ -332,6 +332,32 @@ paths:
       summary: Refresh access token
       tags:
       - auth
+  /api/auth/refresh-token:
+    post:
+      consumes:
+      - application/json
+      description: Generates a new access token using a valid refresh token
+      parameters:
+      - description: Refresh Token
+        in: body
+        name: refreshToken
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New access token generated successfully
+        "400":
+          description: Invalid request body or missing refresh token
+        "401":
+          description: Invalid or expired refresh token
+        "500":
+          description: Internal server error
+      summary: Refresh Access Token
+      tags:
+      - auth
   /api/auth/register:
     post:
       consumes:
@@ -355,8 +381,6 @@ paths:
           description: Invalid request body or missing fields
         "409":
           description: Username or email already exists
-        "500":
-          description: Internal server error
       summary: Register a new user
       tags:
       - auth
@@ -520,8 +544,6 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: List of users retrieved successfully
         "400":
           description: Invalid organization ID
         "404":

@@ -181,11 +181,20 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
+	refreshtoken, err := utils.GenerateRefreshToken(user.ID, h.config.JWTSecret, h.config.JWTRefreshExpirationTime)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+	}
+
 	// Return success response
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"success": true,
-		"token":   token,
-		"user":    user.ToUserResponse(),
+		"success":      true,
+		"token":        token,
+		"user":         user.ToUserResponse(),
+		"refreshToken": refreshtoken,
 	})
 }
 
@@ -287,12 +296,20 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 			"error":   "Failed to generate token",
 		})
 	}
+	refreshtoken, err := utils.GenerateRefreshToken(user.ID, h.config.JWTSecret, h.config.JWTRefreshExpirationTime)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+	}
 
 	// Return success response
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"success": true,
-		"token":   token,
-		"user":    user.ToUserResponse(),
+		"success":      true,
+		"token":        token,
+		"refreshToken": refreshtoken,
+		"user":         user.ToUserResponse(),
 	})
 }
 
@@ -588,5 +605,89 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"success": true,
 		"message": "Logged out successfully",
+	})
+}
+
+// RefreshAccesTokenUsingRefreshToken godoc
+// @Summary      Refresh Access Token
+// @Description  Generates a new access token using a valid refresh token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        refreshToken  body      string  true  "Refresh Token"
+// @Success      200             "New access token generated successfully"
+// @Failure      400             "Invalid request body or missing refresh token"
+// @Failure      401             "Invalid or expired refresh token"
+// @Failure      500             "Internal server error"
+// @Router       /api/auth/refresh-token [post]
+func (h *AuthHandler) RefreshAccesTokenUsingRefreshToken(c *fiber.Ctx) error {
+	type RefreshRequest struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+
+	var req RefreshRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	if req.RefreshToken == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Refresh token is required",
+		})
+	}
+
+	// Validate and parse the refresh token
+	claims, err := utils.ValidateRefreshToken(req.RefreshToken, h.config.JWTSecret)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid or expired refresh token",
+		})
+	}
+	fmt.Println(claims.Subject)
+	objectID, err := primitive.ObjectIDFromHex(claims.Subject)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid user ID in token",
+		})
+	}
+	user := models.User{}
+	collection := h.db.GetCollection(database.UsersCollection)
+	err = collection.FindOne(
+		context.Background(),
+		bson.M{"_id": objectID},
+	).Decode(&user)
+
+	if err == mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "User not found",
+		})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to retrieve user",
+		})
+	}
+
+	// Generate new access token
+	accessToken, err := utils.GenerateToken(
+		user.ID,
+		user.Username,
+		user.Email,
+		user.RoleIDs,
+		user.OrganizationIDs,
+		h.config.JWTSecret,
+		h.config.JWTExpirationTime,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to generate access token",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"accessToken": accessToken,
 	})
 }
