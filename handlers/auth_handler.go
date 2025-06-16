@@ -53,7 +53,18 @@ func NewAuthHandler(cfg *config.Config, db *database.MongoClient) *AuthHandler {
 	}
 }
 
-// Register handles user registration
+// Register godoc
+// @Summary      Register a new user
+// @Description  Creates a new user account with the provided details
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        user  body      models.UserCreateInput  true  "User registration details"
+// @Success      201   {object}  models.UserSwaggerResponse               "User created successfully"
+// @Failure      400                  "Invalid request body or missing fields"
+// @Failure      409                  "Username or email already exists"
+// @Failure      500                  "Internal server error"
+// @Router       /api/auth/register [post]
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	// Parse request body
 	var input models.UserCreateInput
@@ -178,7 +189,18 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	})
 }
 
-// Login authenticates a user
+// Login godoc
+// @Summary      Login a new user
+// @Description  Logs in a user account with the provided details
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        user  body      models.UserLoginInput  true  "User Login details"
+// @Success      201   {object}  models.UserSwaggerResponse               "User Logged successfully"
+// @Failure      400                  "Invalid request body or missing fields"
+// @Failure      409                  "Username or email already exists"
+// @Failure      500                 "Internal server error"
+// @Router       /api/auth/login [post]
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	// Parse request body
 	var input models.UserLoginInput
@@ -462,7 +484,19 @@ func (h *AuthHandler) handleOAuthUser(c *fiber.Ctx, gothUser goth.User, provider
 	})
 }
 
-// RefreshToken refreshes an existing token
+// RefreshToken godoc
+// @Summary      Refresh access token
+// @Description  Refreshes an access token using the provided valid token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        Authorization  header    string  true  "Bearer token"
+// @Success      200            {object}  models.UserSwaggerResponse  "Token refreshed successfully"
+// @Failure      400               "Invalid request or missing token"
+// @Failure      401               "Unauthorized or invalid token"
+// @Failure      403               "User account is disabled"
+// @Failure      500                "Internal server error"
+// @Router       /api/auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *fiber.Ctx) error {
 	// Get the Authorization header
 	authHeader := c.Get("Authorization")

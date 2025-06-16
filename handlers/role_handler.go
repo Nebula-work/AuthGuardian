@@ -29,7 +29,19 @@ func NewRoleHandler(cfg *config.Config, db *database.MongoClient) *RoleHandler {
 	}
 }
 
-// GetRoles retrieves all roles
+// GetRoles godoc
+// @Summary      Retrieve all roles
+// @Description  Fetch a list of roles with optional filters for pagination
+// @Tags         roles
+// @Accept       json
+// @Produce      json
+// @Param        limit          query     int     false  "Number of roles to retrieve (default: 100)"
+// @Param        skip           query     int     false  "Number of roles to skip (default: 0)"
+// @Param        organizationId query     string  false  "Filter roles by organization ID"
+// @Success      200              "List of roles retrieved successfully"
+// @Failure      400            "Invalid query parameters"
+// @Failure      500            "Internal server error"
+// @Router       /api/roles [get]
 func (h *RoleHandler) GetRoles(c *fiber.Ctx) error {
 	// Get query parameters
 	limit := c.QueryInt("limit", 100)
@@ -106,7 +118,18 @@ func (h *RoleHandler) GetRoles(c *fiber.Ctx) error {
 	})
 }
 
-// GetRole retrieves a single role by ID
+// GetRole godoc
+// @Summary      Retrieve a role by ID
+// @Description  Fetch a single role by its unique identifier
+// @Tags         roles
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Role ID"
+// @Success      200  {object}  models.RoleResponse  "Role retrieved successfully"
+// @Failure      400           "Invalid role ID"
+// @Failure      404           "Role not found"
+// @Failure      500           "Internal server error"
+// @Router       /api/roles/{id} [get]
 func (h *RoleHandler) GetRole(c *fiber.Ctx) error {
 	// Get role ID from URL
 	id := c.Params("id")
@@ -154,7 +177,18 @@ func (h *RoleHandler) GetRole(c *fiber.Ctx) error {
 	})
 }
 
-// CreateRole creates a new role
+// CreateRole godoc
+// @Summary      Create a new role
+// @Description  Creates a new role with the provided details
+// @Tags         roles
+// @Accept       json
+// @Produce      json
+// @Param        role  body      models.RoleCreateInput  true  "Role creation details"
+// @Success      201   {object}  models.RoleResponse     "Role created successfully"
+// @Failure      400            "Invalid request body or missing fields"
+// @Failure      409            "Role name already exists"
+// @Failure      500            "Internal server error"
+// @Router       /api/roles [post]
 func (h *RoleHandler) CreateRole(c *fiber.Ctx) error {
 	// Parse request body
 	var input models.RoleCreateInput
@@ -175,7 +209,7 @@ func (h *RoleHandler) CreateRole(c *fiber.Ctx) error {
 
 	// Check if role name already exists in the same organization
 	collection := h.db.GetCollection(database.RolesCollection)
-	
+
 	// Query to check for role with same name in same organization or system default
 	query := bson.M{"name": input.Name}
 	if !input.OrganizationID.IsZero() {
@@ -186,7 +220,7 @@ func (h *RoleHandler) CreateRole(c *fiber.Ctx) error {
 	} else {
 		query["isSystemDefault"] = true
 	}
-	
+
 	existingRole := models.Role{}
 	err := collection.FindOne(context.Background(), query).Decode(&existingRole)
 
@@ -204,13 +238,13 @@ func (h *RoleHandler) CreateRole(c *fiber.Ctx) error {
 
 	// Create role
 	role := models.Role{
-		Name:           input.Name,
-		Description:    input.Description,
-		OrganizationID: input.OrganizationID,
-		PermissionIDs:  input.PermissionIDs,
+		Name:            input.Name,
+		Description:     input.Description,
+		OrganizationID:  input.OrganizationID,
+		PermissionIDs:   input.PermissionIDs,
 		IsSystemDefault: false,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 
 	// Insert role
@@ -232,7 +266,20 @@ func (h *RoleHandler) CreateRole(c *fiber.Ctx) error {
 	})
 }
 
-// UpdateRole updates an existing role
+// UpdateRole godoc
+// @Summary      Update a role
+// @Description  Updates an existing role with the provided details
+// @Tags         roles
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string                  true  "Role ID"
+// @Param        role  body      models.RoleUpdateInput  true  "Role update details"
+// @Success      200   {object}  models.RoleResponse     "Role updated successfully"
+// @Failure      400            "Invalid role ID or request body"
+// @Failure      404            "Role not found"
+// @Failure      409            "Role name already exists"
+// @Failure      500            "Internal server error"
+// @Router       /api/roles/{id} [put]
 func (h *RoleHandler) UpdateRole(c *fiber.Ctx) error {
 	// Get role ID from URL
 	id := c.Params("id")
@@ -297,8 +344,8 @@ func (h *RoleHandler) UpdateRole(c *fiber.Ctx) error {
 		// Check if name is already taken by another role in the same organization
 		if input.Name != existingRole.Name {
 			query := bson.M{
-				"name":        input.Name,
-				"_id":         bson.M{"$ne": objectID},
+				"name": input.Name,
+				"_id":  bson.M{"$ne": objectID},
 			}
 
 			if !existingRole.OrganizationID.IsZero() {
@@ -365,7 +412,18 @@ func (h *RoleHandler) UpdateRole(c *fiber.Ctx) error {
 	})
 }
 
-// DeleteRole deletes a role
+// DeleteRole godoc
+// @Summary      Delete a role
+// @Description  Deletes a role by its unique identifier
+// @Tags         roles
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Role ID"
+// @Success      200  {object}  models.APIResponse  "Role deleted successfully"
+// @Failure      400           "Invalid role ID"
+// @Failure      404           "Role not found"
+// @Failure      500           "Internal server error"
+// @Router       /api/roles/{id} [delete]
 func (h *RoleHandler) DeleteRole(c *fiber.Ctx) error {
 	// Get role ID from URL
 	id := c.Params("id")
@@ -454,7 +512,19 @@ func (h *RoleHandler) DeleteRole(c *fiber.Ctx) error {
 	})
 }
 
-// AddPermissionsToRole adds permissions to a role
+// AddPermissionsToRole godoc
+// @Summary      Add permissions to a role
+// @Description  Adds one or more permissions to a role
+// @Tags         roles
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string                              true  "Role ID"
+// @Param        input body      models.RoleAddPermissionInput       true  "Permission IDs to add"
+// @Success      200   {object}  models.RoleResponse                 "Permissions added to role successfully"
+// @Failure      400            "Invalid role ID or request body"
+// @Failure      404            "Role not found"
+// @Failure      500            "Internal server error"
+// @Router       /api/roles/{id}/permissions [post]
 func (h *RoleHandler) AddPermissionsToRole(c *fiber.Ctx) error {
 	// Get role ID from URL
 	id := c.Params("id")
@@ -574,7 +644,19 @@ func (h *RoleHandler) AddPermissionsToRole(c *fiber.Ctx) error {
 	})
 }
 
-// RemovePermissionsFromRole removes permissions from a role
+// RemovePermissionsFromRole godoc
+// @Summary      Remove permissions from a role
+// @Description  Removes one or more permissions from a role
+// @Tags         roles
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string                              true  "Role ID"
+// @Param        input body      models.RoleRemovePermissionInput    true  "Permission IDs to remove"
+// @Success      200   {object}  models.RoleResponse                 "Permissions removed from role successfully"
+// @Failure      400            "Invalid role ID or request body"
+// @Failure      404            "Role not found"
+// @Failure      500            "Internal server error"
+// @Router       /api/roles/{id}/permissions [delete]
 func (h *RoleHandler) RemovePermissionsFromRole(c *fiber.Ctx) error {
 	// Get role ID from URL
 	id := c.Params("id")
