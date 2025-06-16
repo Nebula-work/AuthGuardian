@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	fiberSwagger "github.com/swaggo/fiber-swagger"
 	"log"
 	"os"
 
@@ -12,9 +13,24 @@ import (
 
 	"rbac-system/config"
 	"rbac-system/database"
+	_ "rbac-system/docs"
 	"rbac-system/routes"
 )
 
+//	@title			RBAC System API
+//	@version		1.0
+//	@description	This is the API documentation for the RBAC system.
+//	@termsOfService	http://example.com/terms/
+
+//	@contact.name	API Support
+//	@contact.url	http://example.com/support
+//	@contact.email	support@example.com
+
+//	@license.name	MIT
+//	@license.url	https://opensource.org/licenses/MIT
+
+// @host		localhost:5000
+// @BasePath	/
 func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig()
@@ -62,7 +78,7 @@ func main() {
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))
-
+	app.Get("/swagger/*", fiberSwagger.WrapHandler)
 	// Setup routes
 	routes.SetupRoutes(app)
 

@@ -36,6 +36,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// User routes
 	users := app.Group("/api/users", middleware.Authenticate(cfg, dbClient))
+
 	users.Get("/", middleware.Authorize(database.UsersCollection, "read", dbClient), userHandler.GetUsers)
 	users.Post("/", middleware.Authorize(database.UsersCollection, "create", dbClient), userHandler.CreateUser)
 	users.Get("/:id", middleware.Authorize(database.UsersCollection, "read", dbClient), userHandler.GetUser)
