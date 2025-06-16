@@ -3,10 +3,10 @@ package routes
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"rbac-system/config"
-	"rbac-system/database"
-	"rbac-system/handlers"
-	"rbac-system/middleware"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/handlers"
+	"github.com/Nebula-work/AuthGuardian/middleware"
 )
 
 // SetupRoutes configures all the routes for the application

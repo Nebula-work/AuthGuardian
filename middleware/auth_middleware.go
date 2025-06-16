@@ -1,155 +1,155 @@
 package middleware
 
 import (
-        "context"
-        "strings"
+	"context"
+	"strings"
 
-        "github.com/gofiber/fiber/v2"
-        "go.mongodb.org/mongo-driver/bson"
-        "go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
-        "rbac-system/config"
-        "rbac-system/database"
-        "rbac-system/models"
-        "rbac-system/utils"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/models"
+	"github.com/Nebula-work/AuthGuardian/utils"
 )
 
 // Authenticate middleware validates JWT tokens
 func Authenticate(cfg *config.Config, db *database.MongoClient) fiber.Handler {
-        return func(c *fiber.Ctx) error {
-                // Get the Authorization header
-                authHeader := c.Get("Authorization")
-                if authHeader == "" {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "missing authorization header",
-                        })
-                }
+	return func(c *fiber.Ctx) error {
+		// Get the Authorization header
+		authHeader := c.Get("Authorization")
+		if authHeader == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "missing authorization header",
+			})
+		}
 
-                // Extract the token
-                tokenParts := strings.Split(authHeader, " ")
-                if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "invalid authorization format",
-                        })
-                }
+		// Extract the token
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "invalid authorization format",
+			})
+		}
 
-                // Validate the token
-                claims, err := utils.ValidateToken(tokenParts[1], cfg.JWTSecret)
-                if err != nil {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "invalid token: " + err.Error(),
-                        })
-                }
+		// Validate the token
+		claims, err := utils.ValidateToken(tokenParts[1], cfg.JWTSecret)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "invalid token: " + err.Error(),
+			})
+		}
 
-                // Set the user claims in the context
-                c.Locals("userId", claims.UserID)
-                c.Locals("username", claims.Username)
-                c.Locals("email", claims.Email)
-                c.Locals("roleIds", claims.RoleIDs)
-                c.Locals("organizationIds", claims.OrganizationIDs)
+		// Set the user claims in the context
+		c.Locals("userId", claims.UserID)
+		c.Locals("username", claims.Username)
+		c.Locals("email", claims.Email)
+		c.Locals("roleIds", claims.RoleIDs)
+		c.Locals("organizationIds", claims.OrganizationIDs)
 
-                return c.Next()
-        }
+		return c.Next()
+	}
 }
 
 // Authorize middleware checks if the user has the required permission
 func Authorize(resource, action string, db *database.MongoClient) fiber.Handler {
-        return func(c *fiber.Ctx) error {
-                // Get user information from context
-                _, ok := c.Locals("userId").(primitive.ObjectID)
-                if !ok {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "user not authenticated",
-                        })
-                }
+	return func(c *fiber.Ctx) error {
+		// Get user information from context
+		_, ok := c.Locals("userId").(primitive.ObjectID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "user not authenticated",
+			})
+		}
 
-                roleIDs, ok := c.Locals("roleIds").([]primitive.ObjectID)
-                if !ok {
-                        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "user roles not found",
-                        })
-                }
+		roleIDs, ok := c.Locals("roleIds").([]primitive.ObjectID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "user roles not found",
+			})
+		}
 
-                // Get roles with permission
-                var roles []models.Role
-                rolesCollection := db.GetCollection(database.RolesCollection)
-                
-                cursor, err := rolesCollection.Find(context.Background(), bson.M{
-                        "_id": bson.M{"$in": roleIDs},
-                })
-                if err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to retrieve roles",
-                        })
-                }
-                defer cursor.Close(context.Background())
+		// Get roles with permission
+		var roles []models.Role
+		rolesCollection := db.GetCollection(database.RolesCollection)
 
-                if err = cursor.All(context.Background(), &roles); err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to decode roles",
-                        })
-                }
+		cursor, err := rolesCollection.Find(context.Background(), bson.M{
+			"_id": bson.M{"$in": roleIDs},
+		})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "failed to retrieve roles",
+			})
+		}
+		defer cursor.Close(context.Background())
 
-                // Extract all permission IDs from the roles
-                var permissionIDs []primitive.ObjectID
-                for _, role := range roles {
-                        permissionIDs = append(permissionIDs, role.PermissionIDs...)
-                }
+		if err = cursor.All(context.Background(), &roles); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "failed to decode roles",
+			})
+		}
 
-                // Check if the user has any permissions
-                if len(permissionIDs) == 0 {
-                        return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "access denied: no permissions",
-                        })
-                }
+		// Extract all permission IDs from the roles
+		var permissionIDs []primitive.ObjectID
+		for _, role := range roles {
+			permissionIDs = append(permissionIDs, role.PermissionIDs...)
+		}
 
-                // Get permissions
-                permissionsCollection := db.GetCollection(database.PermissionsCollection)
-                
-                var permissions []models.Permission
-                cursor, err = permissionsCollection.Find(context.Background(), bson.M{
-                        "_id": bson.M{"$in": permissionIDs},
-                })
-                if err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to retrieve permissions",
-                        })
-                }
-                defer cursor.Close(context.Background())
+		// Check if the user has any permissions
+		if len(permissionIDs) == 0 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"success": false,
+				"error":   "access denied: no permissions",
+			})
+		}
 
-                if err = cursor.All(context.Background(), &permissions); err != nil {
-                        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "failed to decode permissions",
-                        })
-                }
+		// Get permissions
+		permissionsCollection := db.GetCollection(database.PermissionsCollection)
 
-                // Check if the user has the required permission
-                hasPermission := false
-                for _, permission := range permissions {
-                        if (permission.Resource == resource || permission.Resource == models.ResourceAll) &&
-                                (permission.Action == action || permission.Action == models.ActionAll) {
-                                hasPermission = true
-                                break
-                        }
-                }
+		var permissions []models.Permission
+		cursor, err = permissionsCollection.Find(context.Background(), bson.M{
+			"_id": bson.M{"$in": permissionIDs},
+		})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "failed to retrieve permissions",
+			})
+		}
+		defer cursor.Close(context.Background())
 
-                if !hasPermission {
-                        return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-                                "success": false,
-                                "error":   "access denied: insufficient permissions",
-                        })
-                }
+		if err = cursor.All(context.Background(), &permissions); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "failed to decode permissions",
+			})
+		}
 
-                return c.Next()
-        }
+		// Check if the user has the required permission
+		hasPermission := false
+		for _, permission := range permissions {
+			if (permission.Resource == resource || permission.Resource == models.ResourceAll) &&
+				(permission.Action == action || permission.Action == models.ActionAll) {
+				hasPermission = true
+				break
+			}
+		}
+
+		if !hasPermission {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"success": false,
+				"error":   "access denied: insufficient permissions",
+			})
+		}
+
+		return c.Next()
+	}
 }

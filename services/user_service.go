@@ -10,9 +10,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"rbac-system/database"
-	"rbac-system/models"
-	"rbac-system/utils"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/models"
+	"github.com/Nebula-work/AuthGuardian/utils"
 )
 
 // UserService provides user-related operations
@@ -31,7 +31,7 @@ func NewUserService(db *database.MongoClient) *UserService {
 func (s *UserService) GetUsers(limit, skip int, orgID string) ([]models.User, int64, error) {
 	// Prepare query
 	query := bson.M{}
-	
+
 	// Add organization filter if provided
 	if orgID != "" {
 		objectID, err := primitive.ObjectIDFromHex(orgID)
@@ -40,35 +40,35 @@ func (s *UserService) GetUsers(limit, skip int, orgID string) ([]models.User, in
 		}
 		query["organizationIds"] = objectID
 	}
-	
+
 	// Get users collection
 	collection := s.db.GetCollection(database.UsersCollection)
-	
+
 	// Set options
 	findOptions := options.Find().
 		SetLimit(int64(limit)).
 		SetSkip(int64(skip)).
 		SetSort(bson.M{"username": 1})
-	
+
 	// Execute query
 	cursor, err := collection.Find(context.Background(), query, findOptions)
 	if err != nil {
 		return nil, 0, errors.New("failed to retrieve users")
 	}
 	defer cursor.Close(context.Background())
-	
+
 	// Decode users
 	var users []models.User
 	if err := cursor.All(context.Background(), &users); err != nil {
 		return nil, 0, errors.New("failed to decode users")
 	}
-	
+
 	// Get total count
 	count, err := collection.CountDocuments(context.Background(), query)
 	if err != nil {
 		return nil, 0, errors.New("failed to count users")
 	}
-	
+
 	return users, count, nil
 }
 
@@ -79,22 +79,22 @@ func (s *UserService) GetUserByID(id string) (*models.User, error) {
 	if err != nil {
 		return nil, errors.New("invalid user ID")
 	}
-	
+
 	// Get user from database
 	collection := s.db.GetCollection(database.UsersCollection)
 	user := models.User{}
-	
+
 	err = collection.FindOne(
 		context.Background(),
 		bson.M{"_id": objectID},
 	).Decode(&user)
-	
+
 	if err == mongo.ErrNoDocuments {
 		return nil, errors.New("user not found")
 	} else if err != nil {
 		return nil, errors.New("failed to retrieve user")
 	}
-	
+
 	return &user, nil
 }
 
@@ -104,16 +104,16 @@ func (s *UserService) CreateUser(input models.UserCreateInput) (*models.User, er
 	if input.Username == "" || input.Email == "" {
 		return nil, errors.New("username and email are required")
 	}
-	
+
 	// For local auth, password is required
 	if input.AuthProvider == models.LocalAuth && input.Password == "" {
 		return nil, errors.New("password is required for local authentication")
 	}
-	
+
 	// Check if username or email already exists
 	collection := s.db.GetCollection(database.UsersCollection)
 	existingUser := models.User{}
-	
+
 	err := collection.FindOne(
 		context.Background(),
 		bson.M{
@@ -123,29 +123,29 @@ func (s *UserService) CreateUser(input models.UserCreateInput) (*models.User, er
 			},
 		},
 	).Decode(&existingUser)
-	
+
 	if err == nil {
 		return nil, errors.New("username or email already exists")
 	} else if err != mongo.ErrNoDocuments {
 		return nil, errors.New("failed to check for existing user")
 	}
-	
+
 	// Create user
 	user := models.User{
-		Username:      input.Username,
-		Email:         input.Email,
-		FirstName:     input.FirstName,
-		LastName:      input.LastName,
-		Active:        true,
-		EmailVerified: false,
-		RoleIDs:       input.RoleIDs,
+		Username:        input.Username,
+		Email:           input.Email,
+		FirstName:       input.FirstName,
+		LastName:        input.LastName,
+		Active:          true,
+		EmailVerified:   false,
+		RoleIDs:         input.RoleIDs,
 		OrganizationIDs: input.OrganizationIDs,
-		AuthProvider:  input.AuthProvider,
-		ProviderUserID: input.ProviderUserID,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		AuthProvider:    input.AuthProvider,
+		ProviderUserID:  input.ProviderUserID,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
-	
+
 	// Hash password for local auth
 	if input.AuthProvider == models.LocalAuth {
 		hashedPassword, err := utils.HashPassword(input.Password)
@@ -154,16 +154,16 @@ func (s *UserService) CreateUser(input models.UserCreateInput) (*models.User, er
 		}
 		user.HashedPassword = hashedPassword
 	}
-	
+
 	// Insert user
 	result, err := collection.InsertOne(context.Background(), user)
 	if err != nil {
 		return nil, errors.New("failed to create user")
 	}
-	
+
 	// Get the inserted ID
 	user.ID = result.InsertedID.(primitive.ObjectID)
-	
+
 	return &user, nil
 }
 
@@ -174,25 +174,25 @@ func (s *UserService) UpdateUser(id string, input models.UserUpdateInput) (*mode
 	if err != nil {
 		return nil, errors.New("invalid user ID")
 	}
-	
+
 	// Check if user exists
 	collection := s.db.GetCollection(database.UsersCollection)
 	existingUser := models.User{}
-	
+
 	err = collection.FindOne(
 		context.Background(),
 		bson.M{"_id": objectID},
 	).Decode(&existingUser)
-	
+
 	if err == mongo.ErrNoDocuments {
 		return nil, errors.New("user not found")
 	} else if err != nil {
 		return nil, errors.New("failed to retrieve user")
 	}
-	
+
 	// Prepare update fields
 	update := bson.M{"updatedAt": time.Now()}
-	
+
 	if input.Username != "" {
 		// Check if username is already taken by another user
 		if input.Username != existingUser.Username {
@@ -209,7 +209,7 @@ func (s *UserService) UpdateUser(id string, input models.UserUpdateInput) (*mode
 		}
 		update["username"] = input.Username
 	}
-	
+
 	if input.Email != "" {
 		// Check if email is already taken by another user
 		if input.Email != existingUser.Email {
@@ -226,27 +226,27 @@ func (s *UserService) UpdateUser(id string, input models.UserUpdateInput) (*mode
 		}
 		update["email"] = input.Email
 	}
-	
+
 	if input.FirstName != "" {
 		update["firstName"] = input.FirstName
 	}
-	
+
 	if input.LastName != "" {
 		update["lastName"] = input.LastName
 	}
-	
+
 	if input.Active != nil {
 		update["active"] = *input.Active
 	}
-	
+
 	if len(input.RoleIDs) > 0 {
 		update["roleIds"] = input.RoleIDs
 	}
-	
+
 	if len(input.OrganizationIDs) > 0 {
 		update["organizationIds"] = input.OrganizationIDs
 	}
-	
+
 	// Update password if provided
 	if input.Password != "" && existingUser.AuthProvider == models.LocalAuth {
 		hashedPassword, err := utils.HashPassword(input.Password)
@@ -255,29 +255,29 @@ func (s *UserService) UpdateUser(id string, input models.UserUpdateInput) (*mode
 		}
 		update["hashedPassword"] = hashedPassword
 	}
-	
+
 	// Update user
 	_, err = collection.UpdateOne(
 		context.Background(),
 		bson.M{"_id": objectID},
 		bson.M{"$set": update},
 	)
-	
+
 	if err != nil {
 		return nil, errors.New("failed to update user")
 	}
-	
+
 	// Get updated user
 	updatedUser := models.User{}
 	err = collection.FindOne(
 		context.Background(),
 		bson.M{"_id": objectID},
 	).Decode(&updatedUser)
-	
+
 	if err != nil {
 		return nil, errors.New("failed to retrieve updated user")
 	}
-	
+
 	return &updatedUser, nil
 }
 
@@ -288,22 +288,22 @@ func (s *UserService) DeleteUser(id string) error {
 	if err != nil {
 		return errors.New("invalid user ID")
 	}
-	
+
 	// Delete user
 	collection := s.db.GetCollection(database.UsersCollection)
 	result, err := collection.DeleteOne(
 		context.Background(),
 		bson.M{"_id": objectID},
 	)
-	
+
 	if err != nil {
 		return errors.New("failed to delete user")
 	}
-	
+
 	if result.DeletedCount == 0 {
 		return errors.New("user not found")
 	}
-	
+
 	return nil
 }
 
@@ -314,34 +314,34 @@ func (s *UserService) GetUsersByOrgID(orgID string, limit, skip int) ([]models.U
 	if err != nil {
 		return nil, 0, errors.New("invalid organization ID")
 	}
-	
+
 	// Get users in organization
 	collection := s.db.GetCollection(database.UsersCollection)
-	
+
 	// Set options
 	findOptions := options.Find().
 		SetLimit(int64(limit)).
 		SetSkip(int64(skip)).
 		SetSort(bson.M{"username": 1})
-	
+
 	// Execute query
 	cursor, err := collection.Find(
 		context.Background(),
 		bson.M{"organizationIds": objectID},
 		findOptions,
 	)
-	
+
 	if err != nil {
 		return nil, 0, errors.New("failed to retrieve users")
 	}
 	defer cursor.Close(context.Background())
-	
+
 	// Decode users
 	var users []models.User
 	if err := cursor.All(context.Background(), &users); err != nil {
 		return nil, 0, errors.New("failed to decode users")
 	}
-	
+
 	// Get total count
 	count, err := collection.CountDocuments(
 		context.Background(),
@@ -350,7 +350,7 @@ func (s *UserService) GetUsersByOrgID(orgID string, limit, skip int) ([]models.U
 	if err != nil {
 		return nil, 0, errors.New("failed to count users")
 	}
-	
+
 	return users, count, nil
 }
 
@@ -359,29 +359,29 @@ func (s *UserService) UpdateUserSelf(userID primitive.ObjectID, input models.Use
 	// Check if user exists
 	collection := s.db.GetCollection(database.UsersCollection)
 	existingUser := models.User{}
-	
+
 	err := collection.FindOne(
 		context.Background(),
 		bson.M{"_id": userID},
 	).Decode(&existingUser)
-	
+
 	if err == mongo.ErrNoDocuments {
 		return nil, errors.New("user not found")
 	} else if err != nil {
 		return nil, errors.New("failed to retrieve user")
 	}
-	
+
 	// Prepare update fields (limited fields for self-update)
 	update := bson.M{"updatedAt": time.Now()}
-	
+
 	if input.FirstName != "" {
 		update["firstName"] = input.FirstName
 	}
-	
+
 	if input.LastName != "" {
 		update["lastName"] = input.LastName
 	}
-	
+
 	// Update password if provided
 	if input.Password != "" && existingUser.AuthProvider == models.LocalAuth {
 		hashedPassword, err := utils.HashPassword(input.Password)
@@ -390,28 +390,28 @@ func (s *UserService) UpdateUserSelf(userID primitive.ObjectID, input models.Use
 		}
 		update["hashedPassword"] = hashedPassword
 	}
-	
+
 	// Update user
 	_, err = collection.UpdateOne(
 		context.Background(),
 		bson.M{"_id": userID},
 		bson.M{"$set": update},
 	)
-	
+
 	if err != nil {
 		return nil, errors.New("failed to update user")
 	}
-	
+
 	// Get updated user
 	updatedUser := models.User{}
 	err = collection.FindOne(
 		context.Background(),
 		bson.M{"_id": userID},
 	).Decode(&updatedUser)
-	
+
 	if err != nil {
 		return nil, errors.New("failed to retrieve updated user")
 	}
-	
+
 	return &updatedUser, nil
 }

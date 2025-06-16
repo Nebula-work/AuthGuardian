@@ -10,9 +10,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"rbac-system/config"
-	"rbac-system/database"
-	"rbac-system/models"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/models"
 )
 
 // RoleHandler handles role-related requests

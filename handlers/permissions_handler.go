@@ -8,9 +8,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"rbac-system/config"
-	"rbac-system/database"
-	"rbac-system/models"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/models"
 )
 
 // PermissionHandler handles permission-related requests

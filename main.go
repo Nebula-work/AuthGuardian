@@ -11,10 +11,10 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	"rbac-system/config"
-	"rbac-system/database"
-	_ "rbac-system/docs"
-	"rbac-system/routes"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	_ "github.com/Nebula-work/AuthGuardian/docs"
+	"github.com/Nebula-work/AuthGuardian/routes"
 )
 
 //	@title			RBAC System API

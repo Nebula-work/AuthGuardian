@@ -10,9 +10,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"rbac-system/config"
-	"rbac-system/database"
-	"rbac-system/models"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/models"
 )
 
 // OrganizationHandler handles organization-related requests
@@ -761,7 +761,7 @@ func (h *OrganizationHandler) RemoveUserFromOrganization(c *fiber.Ctx) error {
 // @Param        id     path      string  true   "Organization ID"
 // @Param        limit  query     int     false  "Number of users to retrieve (default: 100)"
 // @Param        skip   query     int     false  "Number of users to skip (default: 0)"
-// @Success      200      "List of users retrieved successfully"
+// github.com/Nebula-work/AuthGuardian  "List of users retrieved successfully"
 // @Failure      400             "Invalid organization ID"
 // @Failure      404             "Organization not found"
 // @Failure      500             "Internal server error"

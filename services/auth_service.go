@@ -9,10 +9,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"rbac-system/config"
-	"rbac-system/database"
-	"rbac-system/models"
-	"rbac-system/utils"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/models"
+	"github.com/Nebula-work/AuthGuardian/utils"
 )
 
 // AuthService provides authentication-related operations
@@ -34,7 +34,7 @@ func (s *AuthService) RegisterUser(input models.UserCreateInput) (*models.User, 
 	// Check if username or email already exists
 	collection := s.db.GetCollection(database.UsersCollection)
 	existingUser := models.User{}
-	
+
 	err := collection.FindOne(
 		context.Background(),
 		bson.M{
@@ -60,7 +60,7 @@ func (s *AuthService) RegisterUser(input models.UserCreateInput) (*models.User, 
 	// Get the default user role
 	rolesCollection := s.db.GetCollection(database.RolesCollection)
 	defaultRole := models.Role{}
-	
+
 	err = rolesCollection.FindOne(
 		context.Background(),
 		bson.M{"name": models.UserRole, "isSystemDefault": true},
@@ -75,18 +75,18 @@ func (s *AuthService) RegisterUser(input models.UserCreateInput) (*models.User, 
 
 	// Create user
 	user := models.User{
-		Username:       input.Username,
-		Email:          input.Email,
-		HashedPassword: hashedPassword,
-		FirstName:      input.FirstName,
-		LastName:       input.LastName,
-		Active:         true,
-		EmailVerified:  false,
-		RoleIDs:        roleIDs,
+		Username:        input.Username,
+		Email:           input.Email,
+		HashedPassword:  hashedPassword,
+		FirstName:       input.FirstName,
+		LastName:        input.LastName,
+		Active:          true,
+		EmailVerified:   false,
+		RoleIDs:         roleIDs,
 		OrganizationIDs: input.OrganizationIDs,
-		AuthProvider:   models.LocalAuth,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		AuthProvider:    models.LocalAuth,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 
 	result, err := collection.InsertOne(context.Background(), user)
@@ -105,7 +105,7 @@ func (s *AuthService) LoginUser(input models.UserLoginInput) (*models.User, stri
 	// Find user by username
 	collection := s.db.GetCollection(database.UsersCollection)
 	user := models.User{}
-	
+
 	err := collection.FindOne(
 		context.Background(),
 		bson.M{"username": input.Username, "authProvider": models.LocalAuth},
@@ -160,7 +160,7 @@ func (s *AuthService) ProcessOAuthUser(userInfo models.OAuthUserInfo, provider m
 	// Check if user already exists
 	collection := s.db.GetCollection(database.UsersCollection)
 	existingUser := models.User{}
-	
+
 	err := collection.FindOne(
 		context.Background(),
 		bson.M{
@@ -205,7 +205,7 @@ func (s *AuthService) ProcessOAuthUser(userInfo models.OAuthUserInfo, provider m
 	// Get the default user role
 	rolesCollection := s.db.GetCollection(database.RolesCollection)
 	defaultRole := models.Role{}
-	
+
 	err = rolesCollection.FindOne(
 		context.Background(),
 		bson.M{"name": models.UserRole, "isSystemDefault": true},
@@ -264,7 +264,7 @@ func (s *AuthService) RefreshUserToken(userID primitive.ObjectID) (*models.User,
 	// Find user by ID
 	collection := s.db.GetCollection(database.UsersCollection)
 	user := models.User{}
-	
+
 	err := collection.FindOne(
 		context.Background(),
 		bson.M{"_id": userID},

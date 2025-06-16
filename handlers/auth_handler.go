@@ -17,10 +17,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"rbac-system/config"
-	"rbac-system/database"
-	"rbac-system/models"
-	"rbac-system/utils"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/database"
+	"github.com/Nebula-work/AuthGuardian/models"
+	"github.com/Nebula-work/AuthGuardian/utils"
 )
 
 // AuthHandler handles authentication requests
@@ -63,7 +63,7 @@ func NewAuthHandler(cfg *config.Config, db *database.MongoClient) *AuthHandler {
 // @Success      201   {object}  models.UserSwaggerResponse               "User created successfully"
 // @Failure      400                  "Invalid request body or missing fields"
 // @Failure      409                  "Username or email already exists"
-// @Failure      500                  "Internal server error"
+// github.com/Nebula-work/AuthGuardian               "Internal server error"
 // @Router       /api/auth/register [post]
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	// Parse request body

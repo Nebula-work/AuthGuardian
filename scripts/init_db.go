@@ -10,9 +10,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"rbac-system/config"
-	"rbac-system/models"
-	"rbac-system/utils"
+	"github.com/Nebula-work/AuthGuardian/config"
+	"github.com/Nebula-work/AuthGuardian/models"
+	"github.com/Nebula-work/AuthGuardian/utils"
 )
 
 func main() {
