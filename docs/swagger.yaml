@@ -1000,4 +1000,6 @@ paths:
       summary: Update current user
       tags:
       - users
+schemes:
+- http
 swagger: "2.0"

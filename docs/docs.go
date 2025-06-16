@@ -1522,7 +1522,7 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "localhost:5000",
 	BasePath:         "/",
-	Schemes:          []string{},
+	Schemes:          []string{"http"},
 	Title:            "RBAC System API",
 	Description:      "This is the API documentation for the RBAC system.",
 	InfoInstanceName: "swagger",
